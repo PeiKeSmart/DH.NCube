@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "CubeDemoNC": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "http://localhost:7080/",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "http://localhost:7080;https://localhost:7081"
+    }
+  }
+}

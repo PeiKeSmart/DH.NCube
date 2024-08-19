@@ -1,0 +1,286 @@
+﻿@using NewLife.Common;
+@using NewLife.Cube.WebMiddleware;
+@using NewLife.Cube.Charts;
+@{
+    var set = NewLife.Cube.CubeSetting.Current;
+    var pageSetting = ViewBag.PageSetting as PageSetting ?? PageSetting.Global;
+
+    var title = ViewBag.Title + "";
+    if (set.TitlePrefix && title != "" && !title.Contains(" - "))
+    {
+        title += " - " + NewLife.Common.SysConfig.Current.DisplayName;
+    }
+
+    var res = set.ResourceUrl;
+    if (String.IsNullOrEmpty(res)) res = "/Content";
+    res = res.TrimEnd('/');
+
+    var charts = ViewBag.Charts as ECharts[];
+    var charts2 = ViewBag.Charts2 as ECharts[];
+
+    var ver = typeof(ControllerBaseX).Assembly.GetName().Version;
+
+    var dbclickEnable = pageSetting.EnableTableDoubleClick;
+}
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewBag.Title</title>
+    <meta name="description" content="@SysConfig.Current.Company" />
+    <meta name="keywords" content="@SysConfig.Current.Company" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="shortcut icon" href="~/assets/favicon.ico" />
+    <!-- 网页字体 -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700" />
+    <!-- 自定义样式 -->
+    @RenderSection("css", required: false)
+    <!-- 核心脚本 -->
+    <link href="~/assets/plugins/global/plugins.bundle.css" rel="stylesheet" type="text/css" />
+    <link href="~/assets/css/style.bundle.css" rel="stylesheet" type="text/css" />
+
+    <!-- 全局脚本 -->
+    <script src="~/assets/plugins/global/plugins.bundle.js"></script>
+    <script src="~/assets/js/scripts.bundle.js"></script>
+
+    @if (charts != null && charts.Length > 0 || charts2 != null && charts2.Length > 0)
+    {
+        <script src="@res/echarts/echarts.min.js"></script>
+
+        // 图表主题
+        var name = set.EChartsTheme;
+        if (name.EqualIgnoreCase("Default")) name = "";
+        if (!name.IsNullOrEmpty())
+        {
+            <script src="@res/echarts/theme/@(name).js"></script>
+        }
+    }
+</head>
+
+<!--begin::Body-->
+<body id="kt_app_body" data-kt-app-layout="dark-sidebar" data-kt-app-header-fixed="true" data-kt-app-sidebar-enabled="true" data-kt-app-sidebar-fixed="true" data-kt-app-sidebar-hoverable="true" data-kt-app-sidebar-push-header="true" data-kt-app-sidebar-push-toolbar="true" data-kt-app-sidebar-push-footer="true" data-kt-app-toolbar-enabled="true" class="app-default">
+    <script>
+        var defaultThemeMode = "light"; 
+        var themeMode; 
+        if (document.documentElement) { 
+            if (document.documentElement.hasAttribute("data-bs-theme-mode")) { 
+                themeMode = document.documentElement.getAttribute("data-bs-theme-mode"); 
+            } else { 
+                if (localStorage.getItem("data-bs-theme") !== null) { 
+                    themeMode = localStorage.getItem("data-bs-theme"); 
+                } else { 
+                    themeMode = defaultThemeMode; 
+                } 
+            } 
+
+            if (themeMode === "system") { 
+                themeMode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"; 
+            } 
+
+            document.documentElement.setAttribute("data-bs-theme", themeMode); 
+        }
+    </script>
+    <div id="kt_app_root" class="d-flex flex-column flex-root app-root">
+        <div id="kt_app_page" class="app-page flex-column flex-column-fluid">
+            <!-- 顶部工具栏 -->
+            @await Html.PartialAsync("_Layout_Header")
+
+            <div id="kt_app_wrapper" class="app-wrapper flex-column flex-row-fluid pb-20">
+                <!-- 侧边栏 -->
+                @await Html.PartialAsync("_Layout_Aside")
+
+                <div class="app-main flex-column flex-row-fluid" id="kt_app_main">
+                    <div class="d-flex flex-column flex-column-fluid">
+                        @await Html.PartialAsync("_Layout_Toolbar")
+
+                        <!-- 内容 -->
+                        <div class="app-content flex-column-fluid pt-lg-5" id="kt_app_content">
+                            <div class="app-container container-fluid" id="kt_app_content_container">
+                                @RenderBody()
+
+                                <!-- 内容底部 -->
+                                @if (pageSetting.EnableFooter)
+                                {
+                                    @await Html.PartialAsync("_Layout_Footer")
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统抽屉 -->
+    @await Html.PartialAsync("_Layout_Drawer")
+
+    <!-- 滚动到顶部按钮 -->
+    @await Html.PartialAsync("_Layout_Scrolltop")
+    <div id="div_footer"></div>
+    <!----------------------------------------以下为Javascript脚本区域----------------------------------------------------------------->
+    <!--魔方自定义脚本-->
+    <script src="~/assets/cube.js"></script>
+    <!--自定义脚本-->
+    @RenderSection("scripts", required: false)
+
+    <!-- 启用列表表头选择 -->
+    @if (pageSetting.EnableSelect)
+    {
+        <script>
+            $(function () {
+                var $toolbarContext = $('.toolbar-batch'),
+                    $batchButtons = $('button[data-action="action"], input[data-action="action"]'), //button, input=button, a 3种类型都可以
+                    $table = $('.table'),
+                    $keys = $('input[name="keys"]', $table);
+
+                $table.on('click', '#chkAll', function () {
+                    // 全选
+                    $keys.prop('checked', this.checked);
+                    // 启用禁用批量操作区
+                    $batchButtons.prop('disabled', !this.checked);
+                });
+
+                $table.on('click.checked', 'tbody input[name="keys"]', function (e) {
+                    //页面中所有的checkbox
+                    var allbox = $table.find('tbody :checkbox[name="keys"]');
+                    //页面中所选中的checkbox
+                    var selecteds = $table.find('tbody :checkbox:checked[name="keys"]');
+                    if (selecteds.length > 0) {
+                        // 启用禁用批量操作区
+                        $batchButtons.prop('disabled', false);
+                        //需要判断当前页面所有行的checkbox是否都选中，以此来决定是否需要改变checkbox#chkAll 的状态
+                        if (allbox.length == selecteds.length) {
+                            $table.find('#chkAll').prop('checked', true);
+                        } else {
+                            $table.find('#chkAll').prop('checked', false);
+                        }
+                    }
+                    else {
+                        $batchButtons.prop('disabled', true);
+                        $table.find('#chkAll').prop('checked', false);
+                    }
+                });
+            })
+        </script>
+    }
+
+    <script>
+        $(function () {
+        @if (set != null && set.BootstrapSelect)
+        {
+            <text>
+                    $('.multiselect').each(function () {
+                        $(this).multiselect({
+                            // 下拉列表仅在列表项比较多时显示过滤框
+                            enableFiltering: $(this).children().length > 10,
+                            buttonClass: 'btn btn-white btn-primary',
+                            templates: {
+                                button: '<button type="button" class="multiselect dropdown-toggle" data-toggle="dropdown"></button>',
+                                ul: '<ul class="multiselect-container dropdown-menu"></ul>',
+                                filter: '<li class="multiselect-item filter"><div class="input-group"><span class="input-group-addon"><i class="fa fa-search"></i></span><input class="form-control multiselect-search" type="text"></div></li>',
+                                filterClearBtn: '<span class="input-group-btn"><button class="btn btn-default btn-white btn-grey multiselect-clear-filter" type="button"><i class="fa fa-times-circle red2"></i></button></span>',
+                                li: '<li><a href="javascript:void(0);"><label></label></a></li>',
+                                divider: '<li class="multiselect-item divider"></li>',
+                                liGroup: '<li class="multiselect-item group"><label class="multiselect-group"></label></li>'
+                            },
+                            filterPlaceholder: '搜索',
+                            nonSelectedText: '无',
+                            allSelectedText: '全选'
+                        });
+                    });
+            </text>
+        }
+
+        @*双击跳转到form
+                _List_Data_Action.cshtml变更
+                @Html.ActionLink("编辑", "Edit", new { id = @Model },new{@class="editcell"})*@
+        @if (dbclickEnable)
+        {
+            <text>
+                    $('tr').dblclick(function () {
+                        var $this = $(this);
+                        var row = $this.closest("tr");
+                        var findcell = row.find('.editcell');
+                        if (findcell.length > 0) window.location.href = findcell.attr("href");
+                    });
+            </text>
+        }
+        });
+
+        // 时间控件
+        $(".form_datetime").daterangepicker({
+            singleDatePicker: true,
+            showDropdowns: true,
+            timePicker: true,
+            timePicker24Hour: true,
+            locale: {
+                format: 'YYYY-MM-DD HH:mm:ss',
+                applyLabel: '确定',
+                cancelLabel: '取消',
+                daysOfWeek: ['日', '一', '二', '三', '四', '五', '六'],
+                monthNames: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'],
+            }
+        }).on('apply.daterangepicker', function (ev, picker) {
+            $(this).val(picker.startDate.format("YYYY-MM-DD HH:mm:ss"));
+        }).on('cancel.daterangepicker', function (ev, picker) {
+            $(this).val('');
+        });
+
+        $(".form_date").daterangepicker({
+            singleDatePicker: true,
+            showDropdowns: true,
+            timePicker: true,
+            timePicker24Hour: true,
+            locale: {
+                format: 'YYYY-MM-DD',
+                applyLabel: '确定',
+                cancelLabel: '取消',
+                daysOfWeek: ['日', '一', '二', '三', '四', '五', '六'],
+                monthNames: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'],
+            }
+        }).on('apply.daterangepicker', function (ev, picker) {
+            $(this).val(picker.startDate.format("YYYY-MM-DD"));
+        }).on('cancel.daterangepicker', function (ev, picker) {
+            $(this).val('');
+        });
+
+        // 时间区间插件
+        $("input[name='dtRange']").daterangepicker(
+            {
+                buttonClasses: 'btn',
+                applyClass: 'btn-primary',
+                cancelClass: 'btn-secondary',
+                ranges: {
+                    '今天': [moment(), moment()],
+                    '昨天': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                    '近7天': [moment().subtract(7, 'days'), moment()],
+                    '近30天': [moment().subtract(29, 'days'), moment()],
+                    '这个月': [moment().startOf('month'), moment().endOf('month')],
+                    '上个月': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                },
+                locale: {
+                    format: "YYYY/MM/DD HH:mm",
+                    separator: " - ",
+                    applyLabel: "确认",
+                    cancelLabel: "清空",
+                    fromLabel: "开始时间",
+                    toLabel: "结束时间",
+                    customRangeLabel: "自定义日期范围",
+                    daysOfWeek: ["日", "一", "二", "三", "四", "五", "六"],
+                    monthNames: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"]
+                }
+            }
+        ).on('cancel.daterangepicker', function (ev, picker) {
+            $("#dtRange").val("请选择日期范围");
+            $("#dtStart").val("");
+            $("#dtEnd").val("");
+        }).on('apply.daterangepicker', function (ev, picker) {
+            $("#dtStart").val(picker.startDate.format('YYYY/MM/DD'));
+            $("#dtEnd").val(picker.endDate.format('YYYY/MM/DD'));
+            $("#dtRange").val(picker.startDate.format('YYYY/MM/DD') + " 至 " + picker.endDate.format('YYYY/MM/DD'));
+        });
+    </script>
+</body>
+<!--end::Body-->
+</html>

@@ -1,0 +1,122 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+    <AssemblyTitle>猿人易快速开发平台</AssemblyTitle>
+    <Description>Web快速开发平台，搭建管理后台，灵活可扩展！内部集成了用户权限管理、模板继承、SSO登录、OAuth服务端、数据导出与分享等多个功能模块，在真实项目中经历过单表100亿数据添删改查的考验。</Description>
+    <Company>湖北登灏科技有限公司</Company>
+    <Copyright>©2020-2024 湖北登灏科技有限公司</Copyright>
+    <VersionPrefix>3.7</VersionPrefix>
+    <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
+    <Version>$(VersionPrefix).$(VersionSuffix)</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(VersionPrefix).*</AssemblyVersion>
+    <Deterministic>false</Deterministic>
+    <OutputPath>..\Bin3</OutputPath>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DH.NCube</PackageId>
+    <Authors>$(Company)</Authors>
+    <PackageProjectUrl>https://www.haocoding.com/</PackageProjectUrl>
+    <PackageIcon>DH.png</PackageIcon>
+    <RepositoryUrl>https://github.com/PeiKeSmart/DH.NCube</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>湖北登灏科技有限公司;DH组件;DH;$(AssemblyName)</PackageTags>
+    <PackageReleaseNotes>第三代魔方，前后端分离</PackageReleaseNotes>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>Readme.MD</PackageReadmeFile>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <!--<GeneratePackageOnBuild>true</GeneratePackageOnBuild>-->
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Areas\Cube\Controllers\ModelColumnController.cs" />
+    <Compile Remove="Areas\Cube\Controllers\ModelTableController.cs" />
+    <Compile Remove="Common\FormatType.cs" />
+    <Compile Remove="Entity\模型列.Biz.cs" />
+    <Compile Remove="Entity\模型列.cs" />
+    <Compile Remove="Entity\模型表.Biz.cs" />
+    <Compile Remove="Entity\模型表.cs" />
+    <Compile Remove="Extensions\ItemsExtend.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\DH.NCubeNC\Jobs\BackupDbService.cs" Link="Jobs\BackupDbService.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\CronJobAttribute.cs" Link="Jobs\CronJobAttribute.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\CubeJobBase.cs" Link="Jobs\CubeJobBase.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\HttpService.cs" Link="Jobs\HttpService.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\ICubeJob.cs" Link="Jobs\ICubeJob.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\SqlService.cs" Link="Jobs\SqlService.cs" />
+    <Compile Include="..\DH.NCubeNC\Membership\ManagerProviderHelper.cs" Link="Membership\ManagerProviderHelper.cs" />
+    <Compile Include="..\DH.NCubeNC\Modules\DefaultAdapter.cs" Link="Modules\DefaultAdapter.cs" />
+    <Compile Include="..\DH.NCubeNC\Modules\IAdapter.cs" Link="Modules\IAdapter.cs" />
+    <Compile Include="..\DH.NCubeNC\Modules\IModule.cs" Link="Modules\IModule.cs" />
+    <Compile Include="..\DH.NCubeNC\Modules\ModuleAttribute.cs" Link="Modules\ModuleAttribute.cs" />
+    <Compile Include="..\DH.NCubeNC\Modules\ModuleManager.cs" Link="Modules\ModuleManager.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\AccessService.cs" Link="Services\AccessService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\DataRetentionService.cs" Link="Services\DataRetentionService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\DbDataProtectionBuilderExtensions.cs" Link="Services\DbDataProtectionBuilderExtensions.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\DbXmlRepository.cs" Link="Services\DbXmlRepository.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\JobService.cs" Link="Services\JobService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\PasswordService.cs" Link="Services\PasswordService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\UserService.cs" Link="Services\UserService.cs" />
+    <Compile Include="..\DH.NCubeNC\Session\SessionProvider.cs" Link="Session\SessionProvider.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\DataField.cs" Link="ViewModels\DataField.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\ErrorModel.cs" Link="ViewModels\ErrorModel.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\FieldCollection.cs" Link="ViewModels\FieldCollection.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\FormField.cs" Link="ViewModels\FormField.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\ILinkExtend.cs" Link="ViewModels\ILinkExtend.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\ItemModel.cs" Link="ViewModels\ItemModel.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\IUrlExtend.cs" Link="ViewModels\IUrlExtend.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\ListBoxModel.cs" Link="ViewModels\ListBoxModel.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\ListField.cs" Link="ViewModels\ListField.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\LoginConfigModel.cs" Link="ViewModels\LoginConfigModel.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\MenuTree.cs" Link="ViewModels\MenuTree.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\SearchField.cs" Link="ViewModels\SearchField.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\TextAligns.cs" Link="ViewModels\TextAligns.cs" />
+    <Compile Include="..\DH.NCubeNC\ViewModels\ViewKinds.cs" Link="ViewModels\ViewKinds.cs" />
+    <Compile Include="..\DH.NCubeNC\WebMiddleware\MiddlewareHelper.cs" Link="WebMiddleware\MiddlewareHelper.cs" />
+    <Compile Include="..\DH.NCubeNC\WebMiddleware\TenantMiddleware.cs" Link="WebMiddleware\TenantMiddleware.cs" />
+    <Compile Include="..\DH.NCubeNC\WebMiddleware\TracerMiddleware.cs" Link="WebMiddleware\TracerMiddleware.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DH.NCode" Version="3.7.2024.819-beta1213" />
+    <PackageReference Include="DH.NIP" Version="3.7.2024.819-beta1203" />
+    <PackageReference Include="DH.NStardust" Version="3.7.2024.819-beta1429" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Doc\DH.png" Link="DH.png" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Readme.MD">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Session\" />
+    <Folder Include="Modules\" />
+    <Folder Include="ViewModels\" />
+    <Folder Include="Jobs\" />
+  </ItemGroup>
+
+</Project>

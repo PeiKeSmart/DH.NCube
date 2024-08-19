@@ -1,0 +1,32 @@
+﻿@model ValueTuple<IEntity, DataField>
+@using NewLife;
+@using NewLife.Cube.ViewModels
+@using XCode;
+@using XCode.Configuration;
+@{
+    var pair = Model;
+    var entity = pair.Item1;
+    var field = pair.Item2;
+
+    var set = NewLife.Cube.CubeSetting.Current;
+    var cls = set.FormGroupClass;
+    if (cls.IsNullOrEmpty()) { cls = "form-group col-xs-12 col-sm-6 col-lg-4"; }
+}
+@if (field.DataSource != null || !field.MapField.IsNullOrEmpty() || field.IsAttachment())
+{
+    <div class="@cls">
+        @await Html.PartialAsync("_Form_Item", (Object)Model)
+    </div>
+}
+else if (field.IsBigText())
+{
+    <div class="form-group col-xs-12 col-sm-12">
+        @await Html.PartialAsync("_Form_BigText", (Object)Model)
+    </div>
+}
+else
+{
+    <div class="@cls">
+        @await Html.PartialAsync("_Form_Item", (Object)Model)
+    </div>
+}

@@ -1,0 +1,103 @@
+﻿@using NewLife.Common;
+@using NewLife.Cube.WebMiddleware;
+@using NewLife.Cube.Charts;
+@{
+    var set = NewLife.Cube.CubeSetting.Current;
+    var user = ViewBag.User as IUser ?? User.Identity as IUser;
+    var roleNames = "";
+    if (user != null) roleNames = user.Roles == null ? "" : user.Roles.Join();
+
+    var title = ViewBag.Title + "";
+    if (set.TitlePrefix && title != "" && !title.Contains(" - "))
+    {
+        title += " - " + NewLife.Common.SysConfig.Current.DisplayName;
+    }
+
+    var res = set.ResourceUrl;
+    if (String.IsNullOrEmpty(res)) res = "/Content";
+    res = res.TrimEnd('/');
+
+    var pageSetting = ViewBag.PageSetting as PageSetting ?? PageSetting.Global;
+
+    var charts = ViewBag.Charts as ECharts[];
+    var charts2 = ViewBag.Charts2 as ECharts[];
+
+    var dbclickEnable = pageSetting.EnableTableDoubleClick;
+}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="新生命团队,NewLife,魔方,Cube,XCode" />
+    <title>@title</title>
+    <link href="~/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+
+    <!-- 页面内联样式 -->
+    @RenderSection("css", required: false)
+
+    <link rel="stylesheet" href="@res/tabler/css/tabler.min.css" />
+    <link rel="stylesheet" href="@res/tabler/css/tabler-icons.min.css" />
+    <link rel="stylesheet" href="@res/tabler/css/tabler-flags.min.css" />
+    <link rel="stylesheet" href="@res/tabler/css/tabler-payments.min.css" />
+    <link rel="stylesheet" href="@res/tabler/css/tabler-vendors.min.css" />
+
+    <!-- JQuery作为一等公民，页面内部随时可能使用 -->
+    <script src="@res/js/jquery-2.1.3.min.js"></script>
+    @if (charts != null && charts.Length > 0 || charts2 != null && charts2.Length > 0)
+    {
+        <script src="@res/echarts.min.js"></script>
+    }
+</head>
+<body class="page">
+    @await Html.PartialAsync("_Layout_Header")
+    <div class="page-wrapper">
+        @if (pageSetting.EnableNavbar)
+        {
+            <div class="container-xl">
+                <div class="page-header d-print-none">
+                    @await Html.PartialAsync("_Layout_Nav")
+                </div>
+            </div>
+        }
+        <div class="page-body">
+            <div class="container-xl">
+                @RenderBody()
+            </div>
+        </div>
+        @if (pageSetting.EnableFooter)
+        {
+            @await Html.PartialAsync("_Layout_Footer")
+        }
+    </div>
+
+    <!-- Libs JS -->
+    <script src="@res/tabler/js/nouislider.min.js"></script>
+    <script src="@res/tabler/js/litepicker.js"></script>
+    <script src="@res/tabler/js/tom-select.base.min.js"></script>
+    <!-- Tabler Core -->
+    <script src="@res/tabler/js/tabler.min.js"></script>
+
+    @RenderSection("scripts", required: false)
+
+    <script>
+        $(function () {
+        @*双击跳转到form
+                _List_Data_Action.cshtml变更
+                @Html.ActionLink("编辑", "Edit", new { id = @Model },new{@class="editcell"})*@
+        @if (dbclickEnable)
+        {
+            <text>
+                    $('tr').dblclick(function () {
+                        var $this = $(this);
+                        var row = $this.closest("tr");
+                        var findcell = row.find('.editcell');
+                        if (findcell.length > 0) window.location.href = findcell.attr("href");
+                    });
+            </text>
+        }
+                                                });
+    </script>
+</body>
+</html>

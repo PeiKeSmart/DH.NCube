@@ -1,0 +1,50 @@
+﻿@*
+    表单头
+*@
+
+@using XCode.Configuration;
+@using XCode.Membership;
+@using XCode;
+
+@{
+    var entity = Model as IEntity;
+    var isNew = entity.IsNullKey;
+    var fields = ViewBag.Fields as FieldCollection;
+    var groupFields = fields.GroupByCategory(entity);
+}
+
+<div class="card-header">
+    <div class="card-title">
+        @if (groupFields.Count > 1)
+        {
+            var i = 0;
+            <ul class="nav">
+                @foreach (var group in groupFields)
+                {
+                    var key = group.Key;
+                    key = key.IsNullOrEmpty() ? "默认信息" : (key.TrimEnd("信息").Length < 4 ? key.TrimEnd("信息") + "信息" : key.TrimEnd("信息"));
+                    var cls = "nav-link btn btn-sm btn-color-muted btn-active-secondary fs-6 px-4 me-1 ";
+                    <li class="nav-item">
+                        <a class="@(i == 0 ? cls + "active" : cls)" data-bs-toggle="tab" href="@("#form_tab"+i)">@key</a>
+                    </li>
+                    i++;
+                }
+            </ul>
+        }
+        else
+        {
+            <h4>&nbsp;</h4>
+        }
+    </div>
+
+    <div class="card-toolbar">
+        <button type="submit" class="btn btn-sm btn-outline btn-outline-primary align-self-center me-3">
+            <i class="far fa-@(isNew ? "plus" : "check") fs-2" style="margin-top: -1px;"></i>
+            <span class="kt-hidden-mobile">@(isNew ? "保 存" : "更 新")</span>
+        </button>
+        <a href="@Url.Action("Index")" class="btn btn-sm btn-outline btn-outline-dashed btn-outline-default">
+            <i class="far fa-reply fs-2"></i>
+            <span class="kt-hidden-mobile">返 回</span>
+        </a>
+    </div>
+</div>

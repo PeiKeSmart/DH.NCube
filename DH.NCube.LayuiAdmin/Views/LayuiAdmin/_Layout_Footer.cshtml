@@ -1,0 +1,21 @@
+﻿@using NewLife.Common;
+@using NewLife.Cube.WebMiddleware
+@{
+    var set = NewLife.Cube.CubeSetting.Current;
+    var runInfo = !set.ShowRunTime ? "" : RunTimeMiddleware.GetInfo(this.Context);
+}
+@if (set.ShowRunTime)
+{
+    <div class="layui-fluid">
+        <div class="layui-row layui-col-space15">
+            <div class="layui-col-md12">
+                <div class="layui-card">
+                    <div class="layui-card-header">运行数据</div>
+                    <div class="layui-card-body">
+                        <blockquote class="layui-elem-quote layui-quote-nm">@Html.Raw(runInfo)</blockquote>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}

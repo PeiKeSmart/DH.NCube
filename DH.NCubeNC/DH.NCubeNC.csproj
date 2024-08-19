@@ -1,0 +1,183 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+    <RootNamespace>DH.NCube</RootNamespace>
+    <AssemblyName>DH.NCube</AssemblyName>
+    <AssemblyTitle>猿人易快速开发平台</AssemblyTitle>
+    <Description>Web快速开发平台，搭建管理后台，灵活可扩展！内部集成了用户权限管理、模板继承、SSO登录、OAuth服务端、数据导出与分享等多个功能模块，在真实项目中经历过单表100亿数据添删改查的考验。</Description>
+    <Company>湖北登灏科技有限公司</Company>
+    <Copyright>©2020-2024 湖北登灏科技有限公司</Copyright>
+    <VersionPrefix>3.7</VersionPrefix>
+    <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
+    <Version>$(VersionPrefix).$(VersionSuffix)</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(VersionPrefix).*</AssemblyVersion>
+    <Deterministic>false</Deterministic>
+    <OutputPath>..\Bin</OutputPath>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);MVC</DefineConstants>
+    <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DH.NCube.Core</PackageId>
+    <Authors>$(Company)</Authors>
+    <PackageProjectUrl>https://www.haocoding.com/</PackageProjectUrl>
+    <PackageIcon>DH.png</PackageIcon>
+    <RepositoryUrl>https://github.com/PeiKeSmart/DH.NCube</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>湖北登灏科技有限公司;DH组件;DH;$(AssemblyName)</PackageTags>
+    <PackageReleaseNotes>重构定时作业</PackageReleaseNotes>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>Readme.MD</PackageReadmeFile>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <!--<GeneratePackageOnBuild>true</GeneratePackageOnBuild>-->
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DH.NCode" Version="3.7.2024.819-beta1213" />
+    <PackageReference Include="DH.NIP" Version="3.7.2024.819-beta1203" />
+    <PackageReference Include="DH.NStardust" Version="3.7.2024.819-beta1429" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\DH.NCube\Common\ApiFilterAttribute.cs" Link="Common\ApiFilterAttribute.cs" />
+    <Compile Include="..\DH.NCube\Common\AppControllerBase.cs" Link="Common\AppControllerBase.cs" />
+    <Compile Include="..\DH.NCube\Common\BaseController.cs" Link="Common\BaseController.cs" />
+    <Compile Include="..\DH.NCube\Common\DataPermissionAttribute.cs" Link="Common\DataPermissionAttribute.cs" />
+    <Compile Include="..\DH.NCube\Common\MembershipExtensions.cs" Link="Common\MembershipExtensions.cs" />
+    <Compile Include="..\DH.NCube\Common\NoPermissionException.cs" Link="Common\NoPermissionException.cs" />
+    <Compile Include="..\DH.NCube\Common\OAuthController.cs" Link="Common\OAuthController.cs" />
+    <Compile Include="..\DH.NCube\Common\PageSetting.cs" Link="Common\PageSetting.cs" />
+    <Compile Include="..\DH.NCube\Common\ViewHelper.cs" Link="Common\ViewHelper.cs" />
+    <Compile Include="..\DH.NCube\Entity\OAuth日志.Biz.cs" Link="Entity\OAuth日志.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\OAuth日志.cs" Link="Entity\OAuth日志.cs" />
+    <Compile Include="..\DH.NCube\Entity\OAuth配置.Biz.cs" Link="Entity\OAuth配置.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\OAuth配置.cs" Link="Entity\OAuth配置.cs" />
+    <Compile Include="..\DH.NCube\Entity\委托代理.Biz.cs" Link="Entity\委托代理.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\委托代理.cs" Link="Entity\委托代理.cs" />
+    <Compile Include="..\DH.NCube\Entity\定时作业.Biz.cs" Link="Entity\定时作业.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\定时作业.cs" Link="Entity\定时作业.cs" />
+    <Compile Include="..\DH.NCube\Entity\应用插件.Biz.cs" Link="Entity\应用插件.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\应用插件.cs" Link="Entity\应用插件.cs" />
+    <Compile Include="..\DH.NCube\Entity\应用日志.Biz.cs" Link="Entity\应用日志.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\应用日志.cs" Link="Entity\应用日志.cs" />
+    <Compile Include="..\DH.NCube\Entity\应用系统.Biz.cs" Link="Entity\应用系统.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\应用系统.cs" Link="Entity\应用系统.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户令牌.Biz.cs" Link="Entity\用户令牌.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户令牌.cs" Link="Entity\用户令牌.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户在线.Biz.cs" Link="Entity\用户在线.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户在线.cs" Link="Entity\用户在线.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户统计.Biz.cs" Link="Entity\用户统计.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户统计.cs" Link="Entity\用户统计.cs" />
+    <Compile Include="..\DH.NCube\Entity\用户链接.Biz.cs">
+      <Link>Entity\用户链接.Biz.cs</Link>
+    </Compile>
+    <Compile Include="..\DH.NCube\Entity\用户链接.cs">
+      <Link>Entity\用户链接.cs</Link>
+    </Compile>
+    <Compile Include="..\DH.NCube\Entity\访问规则.Biz.cs" Link="Entity\访问规则.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\访问规则.cs" Link="Entity\访问规则.cs" />
+    <Compile Include="..\DH.NCube\Entity\附件.Biz.cs" Link="Entity\附件.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\附件.cs" Link="Entity\附件.cs" />
+    <Compile Include="..\DH.NCube\Extensions\Pager.cs" Link="Extensions\Pager.cs" />
+    <Compile Include="..\DH.NCube\Extensions\PagerHelper.cs" Link="Extensions\PagerHelper.cs" />
+    <Compile Include="..\DH.NCube\Extensions\WebHelper.cs" Link="Extensions\WebHelper.cs" />
+    <Compile Include="..\DH.NCube\Models\TokenInModel.cs" Link="Models\TokenInModel.cs" />
+    <Compile Include="..\DH.NCube\Services\TokenService.cs" Link="Services\TokenService.cs" />
+    <Compile Include="..\DH.NCube\Web\AttachmentProvider.cs" Link="Web\AttachmentProvider.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\ApprovalInfo.cs" Link="Web\Models\ApprovalInfo.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\CheckInData.cs" Link="Web\Models\CheckInData.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\DepartmentInfo.cs" Link="Web\Models\DepartmentInfo.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\OAuthFieldMap.cs" Link="Web\Models\OAuthFieldMap.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\SsoTokenModel.cs" Link="Web\Models\SsoTokenModel.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\TokenInfo.cs" Link="Web\Models\TokenInfo.cs" />
+    <Compile Include="..\DH.NCube\Web\Models\UserInfo.cs" Link="Web\Models\UserInfo.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuthClient.cs" Link="Web\OAuthClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuthHelper.cs" Link="Web\OAuthHelper.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuthServer.cs" Link="Web\OAuthServer.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\AlipayClient.cs" Link="Web\OAuth\AlipayClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\BaiduClient.cs" Link="Web\OAuth\BaiduClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\DingTalkClient.cs" Link="Web\OAuth\DingTalkClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\GithubClient.cs" Link="Web\OAuth\GithubClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\MicrosoftClient.cs" Link="Web\OAuth\MicrosoftClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\OpenWeixinClient.cs" Link="Web\OAuth\OpenWeixinClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\QQClient.cs" Link="Web\OAuth\QQClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\QyWeiXin.cs" Link="Web\OAuth\QyWeiXin.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\TaobaoClient.cs" Link="Web\OAuth\TaobaoClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\WeiboClient.cs" Link="Web\OAuth\WeiboClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\WeixinClient.cs" Link="Web\OAuth\WeixinClient.cs" />
+    <Compile Include="..\DH.NCube\Web\SsoClient.cs" Link="Web\SsoClient.cs" />
+    <Compile Include="..\DH.NCube\Web\SsoProvider.cs" Link="Web\SsoProvider.cs" />
+    <Compile Include="..\DH.NCube\Web\UserAgentParser.cs" Link="Web\UserAgentParser.cs" />
+    <Compile Include="..\DH.NCube\Web\WebHelper2.cs" Link="Web\WebHelper2.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Areas\Cube\Views\ModelTable\**" />
+    <Content Remove="Areas\Cube\Views\ModelTable\**" />
+    <EmbeddedResource Remove="Areas\Cube\Views\ModelTable\**" />
+    <None Remove="Areas\Cube\Views\ModelTable\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Areas\Cube\Controllers\ModelColumnController.cs" />
+    <Compile Remove="Areas\Cube\Controllers\ModelTableController.cs" />
+    <Compile Remove="Common\ApplicationManager.cs" />
+    <Compile Remove="Common\ITenantController.cs" />
+    <Compile Remove="Extensions\ItemsExtend.cs" />
+    <Compile Remove="ViewModels\FieldModel.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="Views\Shared\_List_Nav.cshtml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Doc\DH.png" Link="DH.png" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Readme.MD">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\DH.NCube\Entity\Cube.xml">
+      <Link>Entity\Cube.xml</Link>
+    </None>
+    <None Include="..\DH.NCube\Entity\xcodetool.exe" Link="Entity\xcodetool.exe" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Update="Views\ACE\MCubeIndex.cshtml">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Update="Views\Shared\_Suggest.cshtml">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Models\" />
+  </ItemGroup>
+</Project>

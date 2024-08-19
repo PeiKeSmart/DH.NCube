@@ -1,0 +1,22 @@
+﻿@model ItemModel
+@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+
+@{
+    var name = Model.Name;
+    var value = (Boolean)Model.Value;
+    var type = Model.Type;
+
+    var atts = HtmlHelper.AnonymousObjectToHtmlAttributes(new object { });
+    if (!atts.ContainsKey("class")) atts.Add("class", "form-check-input");
+
+    // 根据控制器传过来的实体工厂辅助设定Boolean类型的样式
+    var factory = ViewBag.Factory;
+    var cls = factory == null ? "mt-sm-1 mt-md-0" : "mt-sm-1";
+}
+
+<div class="input-group d-flex align-items-center form-switch form-check-custom @cls">
+    @Html.CheckBox(name, value, atts)
+</div>

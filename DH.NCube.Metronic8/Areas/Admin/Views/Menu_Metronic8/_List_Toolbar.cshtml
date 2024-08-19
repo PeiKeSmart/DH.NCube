@@ -1,0 +1,66 @@
+﻿@*
+    列表视图工具栏
+*@
+@using NewLife;
+@using NewLife.Cube
+@using NewLife.Web;
+@using XCode;
+@using NewLife.Cube.Extensions
+@using XCode.Membership
+
+@{
+    var fact = ViewBag.Factory as IEntityFactory;
+    var page = ViewBag.Page as Pager;
+    var title = ViewBag.Title;
+
+    var act = Context.Request.Path + "";
+    if (act.IsNullOrEmpty())
+    {
+        act = Url.Action("Index");
+    }
+
+    var set = ViewBag.PageSetting as PageSetting ?? PageSetting.Global;
+    var list = Model as IList<Menu>;
+}
+
+<!--begin::Toolbar 如果列表视图工具栏上方有仪表盘,设置pt-3 -->
+<div class="d-flex flex-wrap flex-stack pt-0 pb-1">
+    <!--begin::列表统计-->
+    <div>
+        <div class="d-flex align-items-center">
+            <span class="fs-2x text-gray-600 me-2">@(list != null ? list.Count.ToString("n0") : 0)</span>
+        </div>
+        <span class="fs-7 text-gray-400">当前@(title)总数</span>
+    </div>
+
+    <!--end::列表统计-->
+
+    <!--begin::Controls-->
+    <div class="d-flex">
+        <!-- 新增按钮 -->
+        @if (page != null)
+        {
+            var rv = page.GetRouteValue();
+            if (set.EnableAdd && !set.IsReadOnly && this.Has(PermissionFlags.Insert))
+            {
+                <a href="@Url.Action("Add", rv)" class="btn btn-sm btn-icon btn-light-success btn-active-success w-70px" title="新增对象" data-bs-toggle="tooltip" data-bs-placement="top"><i class="fas fa-plus me-3"></i>新增</a>
+                <!-- 分隔条 -->
+                <div class="bullet bg-secondary h-35px w-1px mx-3"></div>
+            }
+        }
+
+        <!-- 批量操作 -->
+        <div class="toolbar-batch">
+            @await Html.PartialAsync("_List_Toolbar_Batch")
+        </div>
+
+        <!-- 自定义工具按钮 -->
+        @await Html.PartialAsync("_List_Toolbar_Custom")
+
+        <!--begin::Wrapper-->
+        @await Html.PartialAsync("_List_Toolbar_Adv")
+        <!--end::Wrapper-->
+    </div>
+    <!--end::Controls-->
+</div>
+<!--end::Toolbar-->

@@ -1,0 +1,37 @@
+﻿@using Microsoft.AspNetCore.Http.Extensions
+@using NewLife.Common;
+@{
+    var cfg = NewLife.Common.SysConfig.Current;
+    var user = ManageProvider.User;
+    var home = NewLife.Cube.CubeSetting.Current.StartPage;
+    var retUrl = Context.Request.GetEncodedPathAndQuery();
+}
+
+<!-- 顶部工具栏 -->
+<div class="app-navbar flex-shrink-0">
+    <!--begin::Topbar-->
+    <div class="d-flex align-items-stretch flex-shrink-0">
+        <!--begin::Toolbar wrapper-->
+        <div class="d-flex align-items-stretch flex-shrink-0">
+            <!-- 系统仪表盘 -->
+            @await Html.PartialAsync("_Layout_Header_Navbar_Dashboard")
+
+            <!-- 系统消息 -->
+            @await Html.PartialAsync("_Layout_Header_Navbar_Notification")
+
+            <!--begin::魔方设置菜单-->
+            @await Html.PartialAsync("_Layout_Header_Navbar_Setting")
+
+            <!-- 快捷入口 -->
+            @await Html.PartialAsync("_Layout_Header_Navbar_QuickLinks")
+
+            <!-- 主题模式 -->
+            @await Html.PartialAsync("_Layout_Header_Navbar_Thememode")
+
+            <!-- 当前用户 -->
+            @await Html.PartialAsync("_Layout_Header_Navbar_User")
+        </div>
+        <!--end::Toolbar wrapper-->
+    </div>
+    <!--end::Topbar-->
+</div>

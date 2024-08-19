@@ -1,0 +1,24 @@
+﻿@model ItemModel
+@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+
+@{
+    var name = Model.Name;
+    var value = Model.Value;
+    var type = Model.Type;
+}
+
+<div class="input-group">
+    <span class="input-group-text"><i class="fas fa-sort-numeric-up"></i></span>
+    @if (name.EqualIgnoreCase("CreateUserID", "CreateUser", "CreateTime", "CreateIP",
+    "UpdateUserID", "UpdateUser", "UpdateTime", "UpdateIP"))
+    {
+        <input id="@name" name="@name" type="number" class="form-control form-control-sm" autocomplete="off" disabled value="@value" />
+    }
+    else
+    {
+        <input id="@name" name="@name" type="number" class="form-control form-control-sm" autocomplete="off" value="@value" />
+    }
+</div>

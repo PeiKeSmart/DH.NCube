@@ -1,0 +1,46 @@
+﻿@using NewLife.Common;
+@using NewLife.Model;
+@using XCode;
+@using XCode.Membership;
+@{
+    var menu = ViewBag.Menu as IMenu;
+    <!--可以通过判断手机端隐藏-->
+    var mb = Context.Request.Headers["User-Agent"].ToString().ToLower();
+
+    String[] mobileAgents = { "iphone", "android", "phone", "mobile", "wap", "netfront", "java", "opera mobi", "opera mini", "ucweb", "windows ce", "symbian", "series", "webos", "sony", "blackberry", "dopod", "nokia", "samsung", "palmsource", "xda", "pieplus", "meizu", "midp", "cldc", "motorola", "foma", "docomo", "up.browser", "up.link", "blazer", "helio", "hosin", "huawei", "novarra", "coolpad", "webos", "techfaith", "palmsource", "alcatel", "amoi", "ktouch", "nexian", "ericsson", "philips", "sagem", "wellcom", "bunjalloo", "maui", "smartphone", "iemobile", "spice", "bird", "zte-", "longcos", "pantech", "gionee", "portalmmm", "jig browser", "hiptop", "benq", "haier", "^lct", "320x320", "240x320", "176x220", "w3c ", "acs-", "alav", "alca", "amoi", "audi", "avan", "benq", "bird", "blac", "blaz", "brew", "cell", "cldc", "cmd-", "dang", "doco", "eric", "hipt", "inno", "ipaq", "java", "jigs", "kddi", "keji", "leno", "lg-c", "lg-d", "lg-g", "lge-", "maui", "maxo", "midp", "mits", "mmef", "mobi", "mot-", "moto", "mwbp", "nec-", "newt", "noki", "oper", "palm", "pana", "pant", "phil", "play", "port", "prox", "qwap", "sage", "sams", "sany", "sch-", "sec-", "send", "seri", "sgh-", "shar", "sie-", "siem", "smal", "smar", "sony", "sph-", "symb", "t-mo", "teli", "tim-", "tosh", "tsm-", "upg1", "upsi", "vk-v", "voda", "wap-", "wapa", "wapi", "wapp", "wapr", "webc", "winw", "winw", "xda", "xda-", "Googlebot-Mobile" };
+    var isMoblie = false;
+    if (mb != null)
+    {
+        for (int i = 0; i < mobileAgents.Length; i++)
+        {
+            if (mb.IndexOf(mobileAgents[i]) >= 0)
+            {
+                isMoblie = true;
+                break;
+            }
+        }
+    }
+}
+
+@if (menu != null && !isMoblie)
+{
+    <!-- 面包屑导航 -->
+    <div class="d-flex align-items-center d-none d-md-block" id="kt_header_nav">
+        <div data-kt-swapper="true" data-kt-swapper-mode="prepend" data-kt-swapper-parent="{default: '#kt_content_container', 'lg': '#kt_header_nav'}" class="page-title d-flex flex-column align-items-start me-3 mt-4 mb-lg-0">
+            <h1 class="d-flex align-items-center text-hover-primary fs-3 mb-0">@(menu != null ? menu.DisplayName : ViewBag.Title)</h1>
+            <ul class="breadcrumb fs-6 pt-1">
+                @if (menu != null)
+                {
+                    foreach (IMenu item in (menu as IEntityTree).AllParents)
+                    {
+                        if (item.ID != 0)
+                        {
+                            <li class="breadcrumb-item"><a href="@(item.Url!=null? Url.Content(item.Url):"#")">@item.DisplayName</a></li>
+                        }
+                    }
+                }
+                <li class="breadcrumb-item text-muted" aria-current="page"><a href="@Url.Action("Index")">@(menu != null ? menu.DisplayName : ViewBag.Title)</a></li>
+            </ul>
+        </div>
+    </div>
+}

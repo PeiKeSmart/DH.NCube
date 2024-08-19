@@ -1,0 +1,85 @@
+﻿@using NewLife.Common;
+@using NewLife.Cube.Areas.Admin;
+@using NewLife.Security;
+@using XCode.DataAccessLayer;
+@using NewLife.Serialization;
+@{
+    //Layout = NewLife.Cube.Setting.Current.Layout;
+
+    var dbs = Model as IList<DbItem>;
+
+    var dataList = new List<object>();
+
+
+    foreach (var item in dbs)
+    {
+        var dal = DAL.Create(item.Name);
+        var pk = dal.ProtectedKey;
+
+        // 密码需要保密
+        var str = pk.Hide(item.ConnStr);
+        var str2 = pk.Hide(dal.Db.ConnectionString);
+
+        dataList.Add(new
+        {
+            Name = item.Name,
+            Type = item.Type,
+            ConnStr = str,
+            Version = item.Version
+        });
+    }
+}
+<el-table :data="tableData"
+          style="width: 100%">
+    <el-table-column prop="Name"
+                     label="名称"
+                     width="180">
+    </el-table-column>
+    <el-table-column prop="Type"
+                     label="类型"
+                     width="180">
+    </el-table-column>
+    <el-table-column prop="ConnStr"
+                     label="连接字符串"
+                     width="180">
+    </el-table-column>
+    <el-table-column prop="Version"
+                     label="版本"
+                     width="180">
+    </el-table-column>
+
+    <el-table-column label="操作" min-width="220" fixed="right">
+        <template slot-scope="scope">
+
+            <el-button type="text" size="mini">备份</el-button>
+            <el-button type="text" size="mini">备份并压缩</el-button>
+            <el-button type="text" size="mini">下载</el-button>
+
+        </template>
+    </el-table-column>
+</el-table>
+@section scripts{
+
+    <script>
+        //Vue2.0 桌面端组件库: https://element.eleme.cn/#/zh-CN/component/cascader
+
+        var main = new Vue({
+            el: '#app',
+            data: {
+
+                tableData: @Html.Raw(dataList.ToJson()),
+
+            },
+            //页面初始化
+            created() {
+
+            },
+            methods: {
+
+            },
+
+        });
+
+    </script>
+
+    }

@@ -1,0 +1,150 @@
+﻿@model ValueTuple<IEntity, DataField>
+@using NewLife;
+@using NewLife.Cube
+@using NewLife.Data;
+@using XCode;
+@using XCode.Configuration;
+@using System.Collections;
+@{
+    var entity = Model.Item1;
+    var item = Model.Item2;
+
+    var fs = ViewBag.Fields as FieldCollection;
+    var dataField = fs.GetField(item.Name);
+    var dataSource = dataField?.DataSource;
+    var itemModel = new ItemModel(item.Name, entity[item.Name], item.Type) { ItemType = item.ItemType, Length = item.Length };
+
+    var err = 0;
+    if (ViewData.ModelState.TryGetValue(item.Name, out var st) && st != null) { err = st.Errors.Count; }
+
+    var des = item.Description;
+    if (!item.DisplayName.IsNullOrEmpty()) des = des?.TrimStart(item.DisplayName);
+    des = des?.TrimStart(new Char[] { '.', '。', ',', '，', ';', '；', ':', '：', '\r', '\n' });
+    var display = dataField?.DisplayName ?? item.DisplayName;
+
+    // 优化对雪花Id的支持
+    if (des.IsNullOrEmpty() && item.Type == typeof(Int64) && itemModel.Value.ToLong() > 700_00000000_00000000)
+    {
+        var snow = new Snowflake();
+        if (snow.TryParse(itemModel.Value.ToLong(), out var time, out _, out _))
+        {
+            des = time.ToString("yyyy-MM-dd HH:mm:ss.fff");
+        }
+    }
+
+    var total = 12;
+    var label = 3;
+    var span = 4;
+    if (err == 0 && des.IsNullOrEmpty())
+    {
+        span = 0;
+    }
+    else if (item.Type == typeof(Boolean) || item.Type.IsEnum)
+    {
+        span += 1;
+    }
+    var input = total - label - span;
+}
+<label class="control-label col-xs-12 col-sm-@label">@display</label>
+<div class="input-group col-xs-12 col-sm-@input">
+    @if (dataSource != null)
+    {
+        var ds = dataSource(entity);
+        if (ds is IDictionary<Int32, String> dic)
+        {
+            if (!ds.Contains(-1))
+            {
+                ds.Add(-1, "<无>");
+            }
+        }
+        else if (ds is IDictionary<String, String> dic2)
+        {
+            if (!ds.Contains("-1"))
+            {
+                ds.Add("-1", "<无>");
+            }
+        }
+
+        // 数据字段以s结尾，表示多选，其它单选
+        if (item.ItemType.EqualIgnoreCase("singleSelect"))
+        {
+            @await Html.PartialAsync("_Form_DropDownList", new ListBoxModel(item.Name, ds, itemModel.Value))
+        }
+        else if (item.ItemType.EqualIgnoreCase("multipleSelect"))
+        {
+            @await Html.PartialAsync("_Form_ListBox", new ListBoxModel(item.Name, ds, itemModel.Value))
+        }
+        else if (item.Name.EndsWith("s"))
+        {
+            @await Html.PartialAsync("_Form_ListBox", new ListBoxModel(item.Name, ds, itemModel.Value))
+        }
+        else
+        {
+            @await Html.PartialAsync("_Form_DropDownList", new ListBoxModel(item.Name, ds, itemModel.Value))
+        }
+    }
+    else
+    {
+        if (!item.MapField.IsNullOrEmpty())
+        {
+            @await Html.PartialAsync("_Form_Map", Model)
+        }
+        else if (item.ReadOnly)
+        {
+            <input class="form-control" id="@item.Name" type="text" value="@itemModel.Value" readonly>
+        }
+        else if (item.Type == typeof(String))
+        {
+            if (item.ItemType.EqualIgnoreCase("image") || item.ItemType.StartsWithIgnoreCase("image-"))
+            {
+                @await Html.PartialAsync("_Form_Image", Model)
+            }
+            else if (item.ItemType.EqualIgnoreCase("file") || item.ItemType.StartsWithIgnoreCase("file-"))
+            {
+                @await Html.PartialAsync("_Form_File", Model)
+            }
+            else
+            {
+                @await Html.PartialAsync("_Form_String", itemModel)
+            }
+        }
+        else if (entity is IEntityTree treeEntity)
+        {
+            var set = entity.GetType().GetValue("Setting") as IEntityTreeSetting;
+            if (set == null || set.Parent != item.Name)
+            {
+                @await Html.PartialAsync("_Form_Editor", itemModel)
+            }
+            else
+            {
+                var root = entity.GetType().GetValue("Root") as IEntityTree;
+                // 找到完整菜单树，但是排除当前节点这个分支
+                var list = root.FindAllChildsExcept(treeEntity);
+                var data = new SelectList(list, set.Key, "TreeNodeText", itemModel.Value);
+                @Html.DropDownList(item.Name, data, new { @class = "multiselect" })
+            }
+        }
+        else
+        {
+            @await Html.PartialAsync("_Form_Editor", itemModel)
+        }
+    }
+</div>
+@if (err > 0)
+{
+    <span class="col-sm-@span alert alert-danger">
+        @Html.ValidationMessage(item.Name)
+    </span>
+}
+else if (!des.IsNullOrEmpty())
+{
+    <span class="hidden-xs col-sm-@span">
+        @{
+            //var des = item.Description.TrimStart(item.DisplayName).TrimStart(",", ".", "，", "。");
+            if (!des.IsNullOrWhiteSpace())
+            {
+                <span class="middle">@des</span>
+            }
+        }
+    </span>
+}

@@ -1,0 +1,17 @@
+﻿@using NewLife;
+@{
+    var set = NewLife.Cube.CubeSetting.Current;
+    var copyright = set.GetCopyright();
+}
+<footer>
+    <div style="margin-top:20px;" class="text-center">
+        @if (!copyright.IsNullOrEmpty())
+        {
+            <span>@copyright</span>
+        }
+        @if (!set.Registration.IsNullOrEmpty())
+        {
+            <a href="https://beian.miit.gov.cn" target="_blank">@set.Registration</a>
+        }
+    </div>
+</footer>

@@ -1,0 +1,52 @@
+﻿@model ItemModel
+@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+
+@{
+    var name = Model.Name;
+    var value = Model.Value;
+    var type = Model.Type;
+    var length = Model.Length;
+}
+
+@if (name.EqualIgnoreCase("file", "image", "files", "images"))
+{
+    @await Html.PartialAsync("_Form_Type_File", Model)
+}
+else if (name.EqualIgnoreCase("Pass", "Password"))
+{
+    var atts = HtmlHelper.AnonymousObjectToHtmlAttributes(new object());
+    if (!atts.ContainsKey("class")) atts.Add("class", "form-control form-control-sm");
+    if (!atts.ContainsKey("autocomplete")) atts.Add("autocomplete", "off");
+    @Html.Password(name, value, atts)
+}
+else
+{
+    <div class="input-group">
+
+        @if (name.EqualIgnoreCase("url"))
+        {
+            <span class="input-group-text"><i class="fas fa-map-marked"></i></span>
+        }
+
+        @if (length < 0 || length >= 300 || name.EqualIgnoreCase("Remark", "Description", "Comment"))
+        {
+            <textarea id="@name" name="@name" class="form-control" rows="3" data-kt-autosize="true">@value</textarea>
+        }
+        else
+        {
+            if (name.EqualIgnoreCase("CreateUserID", "CreateUser", "CreateTime", "CreateIP",
+                "UpdateUserID", "UpdateUser", "UpdateTime", "UpdateIP"))
+            {
+                <input id="@name" name="@name" type="text" class="form-control form-control-sm" autocomplete="off" disabled value="@value" />
+            }
+            else
+            {
+                <input id="@name" name="@name" type="text" class="form-control form-control-sm" autocomplete="off" value="@value" />
+            }
+
+        }
+    </div>
+}

@@ -1,0 +1,59 @@
+﻿@using Microsoft.AspNetCore.Http.Extensions
+@using NewLife.Common;
+@{
+    var retUrl = Context.Request.GetEncodedPathAndQuery();
+
+    var user = ViewBag.User as IUser ?? User.Identity as IUser;
+    var uid = 0;
+    var roleNames = "";
+    if (user != null)
+    {
+        uid = user.ID;
+        roleNames = user.Roles == null ? "" : user.Roles.Join();
+    }
+    var cfg = ViewBag.Config as SysConfig;
+    if (cfg == null) cfg = SysConfig.Current;
+    var name = cfg == null ? "" : cfg.DisplayName;
+}
+<header class="navbar navbar-expand-md d-print-none">
+    <div class="container-xl">
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu" aria-controls="navbar-menu" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+            <a href=".">
+                <img src="/Content/images/logo/NewLife.png" width="110" height="32" alt="Tabler" class="navbar-brand-image">
+            </a>
+        </h1>
+        <h1>
+            @name
+        </h1>
+        <div class="navbar-nav flex-row order-md-last">
+            <div class="nav-item dropdown">
+                <a href="#" class="nav-link d-flex lh-1 text-reset p-0" data-bs-toggle="dropdown" aria-label="Open user menu">
+                    <span class="avatar avatar-sm" style="background-image: url(@user.GetAvatarUrl())"></span>
+                    <div class="d-none d-xl-block ps-2">
+                        <div>@user</div>
+                        <div class="mt-1 small text-muted">@roleNames</div>
+                    </div>
+                </a>
+                <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
+                    <a href="/" class="dropdown-item" target="_blank">首页</a>
+                    <a href="~/Admin/User/Info/@uid" class="dropdown-item">个人信息</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="~/Admin/Cube" class="dropdown-item">系统设置</a>
+                    <a href="~/Admin/User/Logout" class="dropdown-item">注销</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+<header class="navbar-expand-md">
+    <div class="collapse navbar-collapse" id="navbar-menu">
+        <div class="navbar">
+            <div class="container-xl">
+                @await Html.PartialAsync("_Layout_Menu")
+            </div>
+        </div>
+    </div>
+</header>

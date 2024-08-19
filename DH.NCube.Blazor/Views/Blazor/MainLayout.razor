@@ -1,0 +1,77 @@
+﻿@inherits LayoutComponentBase
+
+<div class="pg-header">
+    <div class="row g-3">
+        <div class="col-12">
+            <div style="float:left;font-size:28px;font-weight:600;padding:3px 20px;">
+                @Config.DisplayName
+            </div>
+            <div style="float:right;display:flex;">
+                <div style="display:inline-block;padding-top:5px;">
+                    <Avatar Url="Content/images/Argo-C.png" IsCircle="true" Size="Size.Small" />
+                </div>
+                <div style="display:inline-block;padding-top:5px;">
+                    <Menu Items="@MainInfoItems" DisableNavigation="true" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="pg-content">
+    <div class="menu fl">
+        <div style="height:100%;width:100%;overflow-y:auto;">
+            <Menu Items="@MenuItems" DisableNavigation="true" IsVertical="true" OnClick="@((e) => { return CallBackMenuClick(e); })" />
+        </div>
+    </div>
+    <div class="content fr">
+        <Tab ShowExtendButtons="true" ShowClose="true" @ref="SideTabItems" />
+    </div>
+</div>
+<div class="pg-footer">
+</div>
+
+<style scoped>
+    .fl {
+        float: left;
+    }
+
+    .fr {
+        float: right;
+    }
+
+    body {
+        margin: 0;
+    }
+
+    .pg-header {
+        margin: 0 auto;
+        height: auto;
+    }
+
+    .pg-footer {
+        margin: 0 auto;
+        position: fixed;
+        height: 30px;
+        left: 250px;
+        right: 0;
+        bottom: 0px;
+        background-color: green;
+    }
+
+    .pg-content .menu {
+        width: 250px;
+        position: fixed;
+        top: 48px;
+        left: 0;
+        bottom: 0;
+    }
+
+    .pg-content .content {
+        position: fixed;
+        top: 48px;
+        left: 250px;
+        right: 0;
+        bottom: 0;
+        overflow: auto;
+    }
+</style>

@@ -1,0 +1,62 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>cube</AssemblyName>
+    <RootNamespace>CubeDemo</RootNamespace>
+    <AssemblyTitle>魔方演示平台</AssemblyTitle>
+    <VersionPrefix>5.5</VersionPrefix>
+    <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
+    <Version>$(VersionPrefix).$(VersionSuffix)</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(VersionPrefix).*</AssemblyVersion>
+    <Deterministic>false</Deterministic>
+    <OutputPath>..\Bin\CubeDemoNC</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\Doc\newlife.snk</AssemblyOriginatorKeyFile>
+    <!--<InvariantGlobalization>true</InvariantGlobalization>-->
+    <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="appsettings.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Views\Shared\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Areas\School\Views\Student\_List_Search.cshtml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.8" />
+    <PackageReference Include="NewLife.Redis.Extensions" Version="5.7.2024.801" />
+    <PackageReference Include="NewLife.Stardust.Extensions" Version="3.0.2024.806" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NewLife.Cube.Blazor\NewLife.Cube.Blazor.csproj" />
+    <ProjectReference Include="..\NewLife.Cube.AdminLTE\NewLife.Cube.AdminLTE.csproj" />
+    <ProjectReference Include="..\NewLife.Cube.ElementUI\NewLife.Cube.ElementUI.csproj" />
+    <ProjectReference Include="..\NewLife.Cube.LayuiAdmin\NewLife.Cube.LayuiAdmin.csproj" />
+    <ProjectReference Include="..\NewLife.Cube.Metronic8\NewLife.Cube.Metronic8.csproj" />
+    <ProjectReference Include="..\NewLife.Cube.Metronic\NewLife.Cube.Metronic.csproj" />
+    <ProjectReference Include="..\NewLife.Cube.Tabler\NewLife.Cube.Tabler.csproj" />
+    <ProjectReference Include="..\NewLife.CubeNC\NewLife.CubeNC.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="bootstrap.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

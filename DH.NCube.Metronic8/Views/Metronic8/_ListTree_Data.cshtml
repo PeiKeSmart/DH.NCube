@@ -1,0 +1,112 @@
+﻿@using NewLife;
+@using NewLife.Cube
+@using NewLife.Reflection
+@using NewLife.Web;
+@using XCode;
+@using XCode.Configuration;
+
+@{
+    var fact = ViewBag.Factory as IEntityFactory;
+    var page = ViewBag.Page as Pager;
+    var fields = ViewBag.Fields as FieldCollection;
+    var fk = fact.Unique;
+    var set = ViewBag.PageSetting as PageSetting ?? PageSetting.Global;
+}
+
+<div class="card card-flush">
+    <div class="card-body">
+        <div class="table-responsive dataTables_wrapper dt-bootstrap4">
+            <table class="table table-hover table-row-bordered table-row-dashed align-middle gy-4">
+                <thead>
+                    <tr fs-4 text-muted>
+                        @*@if (set.EnableSelect)
+                        {
+                        <th class="text-center" style="width:10px;"><input type="checkbox" id="chkAll" title="全选" /></th>
+                        }*@
+                        @foreach (var item in fields)
+                        {
+                            var sortUrl = !item.MapField.IsNullOrEmpty() ? page.GetSortUrl(item.MapField) : page.GetSortUrl(item.Name);
+                            var df = item as ListField;
+                            var name = df?.Header ?? item.DisplayName ?? item.Name;
+                            var title = df?.HeaderTitle ?? item.Description;
+
+                            if (item.Type == typeof(DateTime))
+                            {
+                                var width = item.Name.EndsWithIgnoreCase("Date") ? 80 : 134;
+                                <th class="text-center" style="min-width:@(width)px;" title="@title"><a href="@Html.Raw(sortUrl)">@name</a></th>
+                            }
+                            else if (item.Type == null)
+                            {
+                                <th class="text-center" title="@title">@name</th>
+                            }
+                            else
+                            {
+                                <th class="text-center" title="@title"><a href="@Html.Raw(sortUrl)">@name</a></th>
+                            }
+                        }
+                        <th class="text-center">升</th>
+                        <th class="text-center">降</th>
+                        @if (this.Has(PermissionFlags.Detail, PermissionFlags.Update, PermissionFlags.Delete))
+                        {
+                            <th class="text-center">操作</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (IEntityTree entity in Model)
+                    {
+                        var p = entity.Parent as IEntityTree;
+                        if (p == null)
+                        {
+                            p = fact.EntityType.GetValue("Root") as IEntityTree;
+                        }
+                        var id = entity[fk.Name];
+                        <tr class="@(fields.GetRowClass?.Invoke(entity))">
+                            @foreach (var item in fields)
+                            {
+                                var df = item as ListField;
+                                var txt = "";
+                                if (df != null && df.DataVisible != null && !df.DataVisible(entity))
+                                {
+                                    <td></td>
+                                }
+                                else if (df != null && (txt = df.GetLink(entity, page)) != null)
+                                {
+                                    var tdClass = df.GetTextClass(entity);
+                                    <td class="@(tdClass??"text-center")">@Html.Raw(txt)</td>
+                                }
+                                else if (df != null && (txt = df.GetText(entity, page)) != null)
+                                {
+                                    var tdClass = df.GetTextClass(entity);
+                                    <td class="@tdClass)">@Html.Raw(txt)</td>
+                                }
+                                else
+                                {
+                                    @await Html.PartialAsync("_List_Data_Item", new ValueTuple<IEntity, DataField>(entity, item))
+                                }
+                            }
+                            <td class="text-center">
+                                @if (p != null && p.Childs != null && p.Childs.Count > 0 && entity != p.Childs[0])
+                                {
+                                    <a href="@Url.Action("Up", new { id })"><span class="far fa-angle-up fs-2 fw-bolder text-success"></span></a>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (p != null && p.Childs != null && p.Childs.Count > 0 && entity != p.Childs[p.Childs.Count - 1])
+                                {
+                                    <a href="@Url.Action("Down", new { id })"><span class="far fa-angle-down fs-2 fw-bolder text-danger"></span></a>
+                                }
+                            </td>
+                            @if (this.Has(PermissionFlags.Detail, PermissionFlags.Update, PermissionFlags.Delete))
+                            {
+                                <td class="text-center w-80px">
+                                    @await Html.PartialAsync("_List_Data_Action", (Object)entity)
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

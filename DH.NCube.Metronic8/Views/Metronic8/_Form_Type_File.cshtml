@@ -1,0 +1,33 @@
+﻿@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+@{
+    var name = Model.Name.ToLower();
+    var value = Model.Value;
+    var type = Model.Type;
+    var length = Model.Length;
+    var m = (name as String).EqualIgnoreCase("files", "images") ? "multiple" : "";
+}
+
+<div class="input-group">
+
+    @switch (name)
+    {
+        case "image":
+            {
+                <span class="input-group-text"><i class="fas fa-images"></i></span>
+                break;
+            }
+        case "file":
+            {
+                <span class="input-group-text"><i class="fas fa-folder"></i></span>
+                break;
+            }
+        default:
+            <span class="input-group-text"><i class="fas fa-file-upload"></i></span>
+            break;
+    }
+
+    <input id="@name" name="@name" type="file" class="form-control form-control-sm" autocomplete="off" placeholder="" value="@value" @m/>
+</div>

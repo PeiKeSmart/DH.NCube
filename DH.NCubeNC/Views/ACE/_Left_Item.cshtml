@@ -1,0 +1,39 @@
+﻿@using NewLife.Cube.Membership;
+@using NewLife.Model;
+@using XCode.Membership;
+@using NewLife.Cube.ViewModels;
+@{
+    var item = Model as MenuTree;
+    var childs = item.Children ?? new List<MenuTree>();
+    var url = item.Url.IsNullOrEmpty() ? "" : Url.Content(item.Url);
+    var ico = !item.Icon.IsNullOrEmpty() ? item.Icon : "fa-caret-right";
+
+    // 根据租户模式过滤菜单
+    var set = CubeSetting.Current;
+    if (set.EnableTenant) childs = MenuHelper.FilterByTenant(childs, TenantContext.CurrentId > 0);
+}
+<li>
+    @if (childs.Any())
+    {
+        <a href="#" class="dropdown-toggle">
+            <i class="menu-icon fa @ico"></i> &nbsp;
+            @item.DisplayName
+        </a>
+    }
+    else
+    {
+        var target = item.NewWindow ? "_blank" : "main";
+        <a href="@url" target="@target">
+            <i class="menu-icon fa @ico"></i> &nbsp;
+            @item.DisplayName
+        </a>
+
+        <b class="arrow"></b>
+        <ul class="submenu">
+            @foreach (var menu in childs.Where(w => w.Visible))
+            {
+                @await Html.PartialAsync("_Left_Item", menu)
+            }
+        </ul>
+    }
+</li>
