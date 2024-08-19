@@ -24,16 +24,15 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
-    <PackageReference Include="NewLife.Stardust.Extensions" Version="3.0.2024.806" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NewLife.Cube\NewLife.Cube.csproj" />
+    <Folder Include="Controllers\" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
+    <ProjectReference Include="..\DH.NCube\DH.NCube.csproj" />
   </ItemGroup>
 
 </Project>

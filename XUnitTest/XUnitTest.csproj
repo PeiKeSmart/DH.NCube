@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NewLife.CubeNC\NewLife.CubeNC.csproj" />
+    <ProjectReference Include="..\DH.NCubeNC\DH.NCubeNC.csproj" />
   </ItemGroup>
 
 </Project>
