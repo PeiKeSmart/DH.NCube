@@ -10,7 +10,7 @@ using NewLife.Cube.ViewModels;
 using NewLife.Model;
 using XCode.Membership;
 
-namespace NewLife.Cube.Blazor.Views.Blazor
+namespace DH.NCube.Blazor.Views.Blazor
 {
     public partial class MainLayout
     {
