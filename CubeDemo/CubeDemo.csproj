@@ -22,8 +22,6 @@
 
   <ItemGroup>
     <PackageReference Include="DH.NStardust.Extensions" Version="3.7.2024.820" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\DH.NCube.Swagger\DH.NCube.Swagger.csproj" />
     <ProjectReference Include="..\DH.NCube\DH.NCube.csproj" />
   </ItemGroup>
 

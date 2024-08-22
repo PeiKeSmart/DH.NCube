@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>cube</AssemblyName>
     <RootNamespace>CubeDemo</RootNamespace>
-    <AssemblyTitle>魔方演示平台</AssemblyTitle>
+    <AssemblyTitle>猿人易演示平台</AssemblyTitle>
     <VersionPrefix>3.7</VersionPrefix>
     <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
     <Version>$(VersionPrefix).$(VersionSuffix)</Version>
@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NRedis.Extensions" Version="3.7.2024.820" />
+    <PackageReference Include="DH.NRedis.Extensions" Version="3.7.2024.821-beta0308" />
     <PackageReference Include="DH.NStardust.Extensions" Version="3.7.2024.820" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.8" />
   </ItemGroup>

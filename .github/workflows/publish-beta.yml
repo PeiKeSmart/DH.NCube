@@ -38,6 +38,7 @@ jobs:
       run: |
         dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube/DH.NCube.csproj
         dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCubeNC/DH.NCubeNC.csproj
+        dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube.Swagger/DH.NCube.Swagger.csproj
 
     - name: Publish
       run: |

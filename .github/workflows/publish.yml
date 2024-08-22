@@ -24,6 +24,7 @@ jobs:
       run: |
         dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube/DH.NCube.csproj
         dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCubeNC/DH.NCubeNC.csproj
+        dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube.Swagger/DH.NCube.Swagger.csproj
         #dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube.AdminLTE/DH.NCube.AdminLTE.csproj
         #dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube.ElementUI/DH.NCube.ElementUI.csproj
         dotnet pack --no-build --version-suffix ${{ env.VERSION }} -c Release -o out DH.NCube.LayuiAdmin/DH.NCube.LayuiAdmin.csproj
