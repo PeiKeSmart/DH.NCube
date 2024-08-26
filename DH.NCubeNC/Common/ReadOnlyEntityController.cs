@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using NewLife.Common;
+using NewLife.Cube.Charts;
 using NewLife.Cube.Entity;
 using NewLife.Cube.Extensions;
 using NewLife.Cube.Results;
@@ -1412,5 +1413,70 @@ public class ReadOnlyEntityController<TEntity> : ControllerBaseX where TEntity :
     //        yield return OnFilter(item, kind);
     //    }
     //}
+    #endregion
+
+    #region 图表
+    /// <summary>快捷添加图表</summary>
+    /// <param name="data">数据集</param>
+    /// <param name="xAxis">X轴。多X轴可独立设置</param>
+    /// <param name="yAxis">Y轴。多Y轴可独立设置</param>
+    /// <param name="yFields">数据字段。为每个数据字段绘制系列</param>
+    /// <param name="seriesType">系列类型</param>
+    /// <param name="position">位置。默认top，可选bottom</param>
+    /// <returns></returns>
+    public virtual ECharts AddChart(IList<TEntity> data, DataField xAxis, String yAxis = null, DataField[] yFields = null, SeriesTypes seriesType = SeriesTypes.Line, String position = "top")
+    {
+        var chart = new ECharts
+        {
+            Height = 400,
+        };
+
+        // X轴
+        if (xAxis != null)
+        {
+            chart.SetX(data, xAxis);
+
+            if (xAxis.Type == typeof(DateTime)) chart.AddDataZoom();
+        }
+
+        // Y轴
+        if (!yAxis.IsNullOrEmpty()) chart.SetY(yAxis);
+
+        // 数据图例
+        if (yFields != null && yFields.Length > 0)
+        {
+            // 饼图需要分类，来自X轴
+            if (seriesType == SeriesTypes.Pie)
+            {
+                foreach (var field in yFields)
+                {
+                    field.DisplayName = xAxis.DisplayName;
+                    if (field.Category.IsNullOrEmpty()) field.Category = xAxis.Name;
+                }
+            }
+
+            chart.Add(data, yFields, seriesType);
+        }
+
+        if (seriesType == SeriesTypes.Pie)
+            chart.SetTooltip("item", null, null);
+        else
+            chart.SetTooltip();
+
+        if (position.IsNullOrEmpty() || position == "top")
+        {
+            var charts = ViewBag.Charts as IList<ECharts> ?? [];
+            charts.Add(chart);
+            ViewBag.Charts = charts;
+        }
+        else
+        {
+            var charts = ViewBag.Charts2 as IList<ECharts> ?? [];
+            charts.Add(chart);
+            ViewBag.Charts2 = charts;
+        }
+
+        return chart;
+    }
     #endregion
 }
