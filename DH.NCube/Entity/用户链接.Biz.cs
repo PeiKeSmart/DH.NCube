@@ -105,31 +105,31 @@ public partial class UserConnect : Entity<UserConnect>
         return FindAll(_.UserID == userid);
     }
 
-    /// <summary>根据身份标识查找</summary>
-    /// <param name="openId">身份标识</param>
-    /// <returns>实体列表</returns>
-    public static IList<UserConnect> FindAllByOpenID(String openId)
-    {
-        if (openId.IsNullOrEmpty()) return new List<UserConnect>();
+/// <summary>根据身份标识查找</summary>
+/// <param name="openId">身份标识</param>
+/// <returns>实体列表</returns>
+public static IList<UserConnect> FindAllByOpenID(String openId)
+{
+    if (openId.IsNullOrEmpty()) return new List<UserConnect>();
 
-        // 实体缓存
-        if (Meta.Session.Count < 1000) return Meta.Cache.FindAll(e => e.OpenID.EqualIgnoreCase(openId));
+    // 实体缓存
+    if (Meta.Session.Count < 1000) return Meta.Cache.FindAll(e => e.OpenID.EqualIgnoreCase(openId));
 
-        return FindAll(_.OpenID == openId);
-    }
+    return FindAll(_.OpenID == openId);
+}
 
-    /// <summary>根据设备标识查找</summary>
-    /// <param name="deviceId">设备标识</param>
-    /// <returns>实体列表</returns>
-    public static IList<UserConnect> FindAllByDeviceId(String deviceId)
-    {
-        if (deviceId.IsNullOrEmpty()) return new List<UserConnect>();
+/// <summary>根据设备标识查找</summary>
+/// <param name="deviceId">设备标识</param>
+/// <returns>实体列表</returns>
+public static IList<UserConnect> FindAllByDeviceId(String deviceId)
+{
+    if (deviceId.IsNullOrEmpty()) return new List<UserConnect>();
 
-        // 实体缓存
-        if (Meta.Session.Count < 1000) return Meta.Cache.FindAll(e => e.DeviceId.EqualIgnoreCase(deviceId));
+    // 实体缓存
+    if (Meta.Session.Count < 1000) return Meta.Cache.FindAll(e => e.DeviceId.EqualIgnoreCase(deviceId));
 
-        return FindAll(_.DeviceId == deviceId);
-    }
+    return FindAll(_.DeviceId == deviceId);
+}
     #endregion
 
     #region 高级查询
