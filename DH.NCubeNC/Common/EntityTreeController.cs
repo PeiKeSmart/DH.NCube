@@ -12,7 +12,12 @@ namespace NewLife.Cube;
 
 /// <summary>实体树控制器基类</summary>
 /// <typeparam name="TEntity"></typeparam>
-public class EntityTreeController<TEntity> : EntityController<TEntity> where TEntity : EntityTree<TEntity>, new()
+public class EntityTreeController<TEntity> : EntityTreeController<TEntity, TEntity> where TEntity : EntityTree<TEntity>, new() { }
+
+/// <summary>实体树控制器基类</summary>
+/// <typeparam name="TEntity"></typeparam>
+/// <typeparam name="TModel"></typeparam>
+public class EntityTreeController<TEntity, TModel> : EntityController<TEntity, TModel> where TEntity : EntityTree<TEntity>, new()
 {
     static EntityTreeController()
     {
@@ -79,19 +84,44 @@ public class EntityTreeController<TEntity> : EntityController<TEntity> where TEn
         base.OnActionExecuting(filterContext);
     }
 
+    /// <summary>实体树配置</summary>
+    /// <returns></returns>
+    protected IEntityTreeSetting GetSetting()
+    {
+        //var set = EntityTree<TEntity>.Setting;
+        var set = typeof(EntityTree<TEntity>).GetValue("Setting") as IEntityTreeSetting;
+        return set;
+    }
+
     /// <summary>列表页视图。子控制器可重载，以传递更多信息给视图，比如修改要显示的列</summary>
     /// <param name="p"></param>
     /// <returns></returns>
     protected override ActionResult IndexView(Pager p)
     {
-        // 一页显示全部菜单，取自缓存
-        p.PageSize = 10000;
-
-        var list = EntityTree<TEntity>.Root.AllChilds;
+        var list = SearchData(p);
 
         if (IsJsonRequest) return Json(0, null, list, new { page = p });
 
         return View("ListTree", list);
+    }
+
+    /// <summary>搜索数据集</summary>
+    /// <param name="p"></param>
+    /// <returns></returns>
+    protected override IEnumerable<TEntity> Search(Pager p)
+    {
+        // 一页显示全部菜单，取自缓存
+        if (p.PageSize == 20) p.PageSize = 10000;
+
+        var set = GetSetting();
+        if (set != null && !set.Parent.IsNullOrEmpty())
+        {
+            var pkey = p[set.Parent].ToInt(-1);
+            if (pkey >= 0)
+                return EntityTree<TEntity>.FindAllChildsByParent(pkey);
+        }
+
+        return EntityTree<TEntity>.Root.AllChilds;
     }
 
     ///// <summary>要导出Xml的对象</summary>
@@ -120,6 +150,21 @@ public class EntityTreeController<TEntity> : EntityController<TEntity> where TEn
         if (Valid(menu, DataObjectMethodType.Update, true))
             menu.Up();
 
+        var set = GetSetting();
+        if (set != null && !set.Parent.IsNullOrEmpty())
+        {
+            var p = WebHelper.Params;
+            var pkey = p[set.Parent].ToInt(-1);
+            if (pkey >= 0)
+            {
+                var dic = new RouteValueDictionary
+                {
+                    [set.Parent] = pkey
+                };
+                return RedirectToAction("Index", dic);
+            }
+        }
+
         return RedirectToAction("Index");
     }
 
@@ -134,6 +179,21 @@ public class EntityTreeController<TEntity> : EntityController<TEntity> where TEn
 
         if (Valid(menu, DataObjectMethodType.Update, true))
             menu.Down();
+
+        var set = GetSetting();
+        if (set != null && !set.Parent.IsNullOrEmpty())
+        {
+            var p = WebHelper.Params;
+            var pkey = p[set.Parent].ToInt(-1);
+            if (pkey >= 0)
+            {
+                var dic = new RouteValueDictionary
+                {
+                    [set.Parent] = pkey
+                };
+                return RedirectToAction("Index", dic);
+            }
+        }
 
         return RedirectToAction("Index");
     }
