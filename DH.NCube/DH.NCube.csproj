@@ -100,7 +100,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DH.NCode" Version="3.7.2024.920-beta0117" />
-    <PackageReference Include="DH.NIP" Version="3.7.2024.918-beta1024" />
+    <PackageReference Include="DH.NIP" Version="3.7.2024.920-beta0135" />
     <PackageReference Include="DH.NStardust" Version="3.7.2024.918-beta0838" />
   </ItemGroup>
 
