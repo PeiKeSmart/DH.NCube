@@ -50,9 +50,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="3.91.2024.923-beta0244" />
-    <PackageReference Include="DH.NIP" Version="3.91.2024.923-beta0303" />
-    <PackageReference Include="DH.NStardust" Version="3.91.2024.923-beta0321" />
+    <PackageReference Include="DH.NCode" Version="3.91.2024.1008-beta0227" />
+    <PackageReference Include="DH.NIP" Version="3.91.2024.1008-beta0406" />
+    <PackageReference Include="DH.NStardust" Version="3.91.2024.1008-beta0339" />
   </ItemGroup>
 
   <ItemGroup>
