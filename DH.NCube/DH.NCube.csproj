@@ -99,9 +99,9 @@
     <Compile Include="..\DH.NCubeNC\WebMiddleware\TracerMiddleware.cs" Link="WebMiddleware\TracerMiddleware.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="3.91.2024.1010-beta0330" />
+    <PackageReference Include="DH.NCode" Version="3.91.2024.1011-beta0131" />
     <PackageReference Include="DH.NIP" Version="3.91.2024.1008-beta0834" />
-    <PackageReference Include="DH.NStardust" Version="3.91.2024.1010-beta0622" />
+    <PackageReference Include="DH.NStardust" Version="3.91.2024.1011-beta0209" />
   </ItemGroup>
 
   <ItemGroup>
