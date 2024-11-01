@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
     <RootNamespace>DH.NCube</RootNamespace>
     <AssemblyName>DH.NCube</AssemblyName>
     <AssemblyTitle>猿人易快速开发平台</AssemblyTitle>
@@ -51,7 +51,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DH.NCode" Version="3.91.2024.1031" />
-    <PackageReference Include="DH.NIP" Version="3.91.2024.1013-beta0940" />
+    <PackageReference Include="DH.NIP" Version="3.91.2024.1101-beta0212" />
     <PackageReference Include="DH.NStardust" Version="3.91.2024.1031" />
   </ItemGroup>
 

@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NRedis.Extensions" Version="3.91.2024.1021-beta0734" />
+    <PackageReference Include="DH.NRedis.Extensions" Version="3.91.2024.1101-beta0242" />
     <PackageReference Include="DH.NStardust.Extensions" Version="3.91.2024.1031" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.10" />
   </ItemGroup>
