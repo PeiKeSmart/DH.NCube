@@ -64,7 +64,7 @@
     <Compile Include="..\DH.NCube\Common\NoPermissionException.cs" Link="Common\NoPermissionException.cs" />
     <Compile Include="..\DH.NCube\Common\OAuthController.cs" Link="Common\OAuthController.cs" />
     <Compile Include="..\DH.NCube\Common\PageSetting.cs" Link="Common\PageSetting.cs" />
-    <Compile Include="..\NewLife.Cube\Common\ReadOnlyEntityController2.cs" Link="Common\ReadOnlyEntityController2.cs" />
+    <Compile Include="..\DH.NCube\Common\ReadOnlyEntityController2.cs" Link="Common\ReadOnlyEntityController2.cs" />
     <Compile Include="..\DH.NCube\Common\ViewHelper.cs" Link="Common\ViewHelper.cs" />
     <Compile Include="..\DH.NCube\Entity\OAuth日志.Biz.cs" Link="Entity\OAuth日志.Biz.cs" />
     <Compile Include="..\DH.NCube\Entity\OAuth日志.cs" Link="Entity\OAuth日志.cs" />
