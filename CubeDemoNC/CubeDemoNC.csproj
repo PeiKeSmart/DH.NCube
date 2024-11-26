@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <AssemblyName>cube</AssemblyName>
     <RootNamespace>CubeDemo</RootNamespace>
     <AssemblyTitle>猿人易演示平台</AssemblyTitle>
@@ -35,9 +35,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NRedis.Extensions" Version="3.91.2024.1109-beta0248" />
-    <PackageReference Include="DH.NStardust.Extensions" Version="3.91.2024.1109-beta1500" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="8.0.10" />
+    <PackageReference Include="BootstrapBlazor" Version="9.0.1" />
+    <PackageReference Include="DH.NRedis.Extensions" Version="4.0.2024.1126-beta0234" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.0.2024.1126-beta0228" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

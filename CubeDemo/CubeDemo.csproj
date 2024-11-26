@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <AssemblyTitle>猿人易WebApi</AssemblyTitle>
     <Description>猿人易前后端分离版本的后端WebApi</Description>
     <Company>湖北登灏科技有限公司</Company>
@@ -21,7 +21,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NStardust.Extensions" Version="3.91.2024.1109-beta1500" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.0.2024.1126-beta0228" />
   </ItemGroup>
 
   <ItemGroup>
