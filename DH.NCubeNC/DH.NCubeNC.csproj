@@ -60,6 +60,7 @@
     <Compile Include="..\DH.NCube\Common\AppControllerBase.cs" Link="Common\AppControllerBase.cs" />
     <Compile Include="..\DH.NCube\Common\BaseController.cs" Link="Common\BaseController.cs" />
     <Compile Include="..\DH.NCube\Common\DataPermissionAttribute.cs" Link="Common\DataPermissionAttribute.cs" />
+    <Compile Include="..\DH.NCube\Common\EntityController2.cs" Link="Common\EntityController2.cs" />
     <Compile Include="..\DH.NCube\Common\MembershipExtensions.cs" Link="Common\MembershipExtensions.cs" />
     <Compile Include="..\DH.NCube\Common\NoPermissionException.cs" Link="Common\NoPermissionException.cs" />
     <Compile Include="..\DH.NCube\Common\OAuthController.cs" Link="Common\OAuthController.cs" />
