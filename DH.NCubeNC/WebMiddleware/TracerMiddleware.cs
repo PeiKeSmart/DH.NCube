@@ -205,6 +205,7 @@ public class TracerMiddleware
         var p = host.LastIndexOf(':');
         if (p >= 0) host = host[..p];
         if (host.EqualIgnoreCase("127.0.0.1", "localhost", "[::1]")) return;
+        if (host.StartsWith("127.0.")) return;
 
         var baseAddress = $"{uri.Scheme}://{uri.Authority}";
 
@@ -216,7 +217,8 @@ public class TracerMiddleware
             ss = ss.Where(e => !e.EqualIgnoreCase("127.0.0.1", "localhost", "[::1]")).ToList();
 
             ss.Insert(0, baseAddress);
-            set.ServiceAddress = ss.Take(3).Join(",");
+            set.ServiceAddress = ss.Take(5).OrderBy(e => e).Join(",");
+
             set.Save();
         }
     }
