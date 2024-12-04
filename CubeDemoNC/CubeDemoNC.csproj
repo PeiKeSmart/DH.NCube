@@ -35,9 +35,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BootstrapBlazor" Version="9.0.1" />
-    <PackageReference Include="DH.NRedis.Extensions" Version="4.0.2024.1201-beta0334" />
-    <PackageReference Include="DH.NStardust.Extensions" Version="4.0.2024.1126-beta0228" />
+    <PackageReference Include="BootstrapBlazor" Version="9.1.0" />
+    <PackageReference Include="DH.NRedis.Extensions" Version="4.0.2024.1204-beta0337" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.0.2024.1204-beta0331" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="9.0.0" />
   </ItemGroup>
 
