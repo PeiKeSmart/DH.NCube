@@ -1,9 +1,7 @@
 ﻿using System.Net;
-
 using NewLife.Collections;
 using NewLife.Log;
 using NewLife.Web;
-
 using HttpContext = Microsoft.AspNetCore.Http.HttpContext;
 
 namespace NewLife.Cube.WebMiddleware;
@@ -218,7 +216,6 @@ public class TracerMiddleware
 
             ss.Insert(0, baseAddress);
             set.ServiceAddress = ss.Take(5).Join(",");
-
             set.Save();
         }
     }
