@@ -50,9 +50,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="4.11.2025.303" />
-    <PackageReference Include="DH.NIP" Version="4.11.2025.303" />
-    <PackageReference Include="DH.NStardust" Version="4.11.2025.303" />
+    <PackageReference Include="DH.NCode" Version="4.11.2025.412" />
+    <PackageReference Include="DH.NIP" Version="4.11.2025.412" />
+    <PackageReference Include="DH.NStardust" Version="4.11.2025.412" />
   </ItemGroup>
 
   <ItemGroup>
@@ -67,6 +67,22 @@
     <Compile Include="..\DH.NCube\Common\PageSetting.cs" Link="Common\PageSetting.cs" />
     <Compile Include="..\DH.NCube\Common\ReadOnlyEntityController2.cs" Link="Common\ReadOnlyEntityController2.cs" />
     <Compile Include="..\DH.NCube\Common\ViewHelper.cs" Link="Common\ViewHelper.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\AccessRuleModel.cs" Link="Entity\Models\AccessRuleModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\AppLogModel.cs" Link="Entity\Models\AppLogModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\AppModel.cs" Link="Entity\Models\AppModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\AppModuleModel.cs" Link="Entity\Models\AppModuleModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\AttachmentModel.cs" Link="Entity\Models\AttachmentModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\CronJobModel.cs" Link="Entity\Models\CronJobModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\ModelColumnModel.cs" Link="Entity\Models\ModelColumnModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\ModelTableModel.cs" Link="Entity\Models\ModelTableModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\OAuthConfigModel.cs" Link="Entity\Models\OAuthConfigModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\OAuthLogModel.cs" Link="Entity\Models\OAuthLogModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\OrderManagerModel.cs" Link="Entity\Models\OrderManagerModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\PrincipalAgentModel.cs" Link="Entity\Models\PrincipalAgentModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\UserConnectModel.cs" Link="Entity\Models\UserConnectModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\UserOnlineModel.cs" Link="Entity\Models\UserOnlineModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\UserStatModel.cs" Link="Entity\Models\UserStatModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\UserTokenModel.cs" Link="Entity\Models\UserTokenModel.cs" />
     <Compile Include="..\DH.NCube\Entity\OAuth日志.Biz.cs" Link="Entity\OAuth日志.Biz.cs" />
     <Compile Include="..\DH.NCube\Entity\OAuth日志.cs" Link="Entity\OAuth日志.cs" />
     <Compile Include="..\DH.NCube\Entity\OAuth配置.Biz.cs" Link="Entity\OAuth配置.Biz.cs" />
@@ -178,8 +194,5 @@
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Models\" />
   </ItemGroup>
 </Project>
