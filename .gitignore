@@ -24,3 +24,4 @@ bld/
 /packages
 *.log
 /DH.NCube.Swagger/.vs/DH.NCube.Swagger
+/DH.NCube/Properties/launchSettings.json
