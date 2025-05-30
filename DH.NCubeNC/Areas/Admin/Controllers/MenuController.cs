@@ -38,7 +38,7 @@ public class MenuController : EntityTreeController<Menu, MenuModel>
         // 一页显示全部菜单，取自缓存
         p.PageSize = 10000;
 
-        var menus = EntityTree<Menu>.Root.AllChilds.Where(e => e.Deepth <= 2).ToList();
+        var menus = EntityTree<Menu>.Root.AllChilds.ToList();
 
         var set = GetSetting();
         if (set != null && !set.Parent.IsNullOrEmpty())
@@ -47,8 +47,7 @@ public class MenuController : EntityTreeController<Menu, MenuModel>
             if (pkey >= 0)
             {
                 var m = XCode.Membership.Menu.FindByID(pkey);
-                var deepth = ((m?.Deepth - 1) ?? 0) + 2;
-                menus = EntityTree<Menu>.FindAllChildsByParent(pkey).Where(e => e.Deepth <= deepth).ToList();
+                menus = EntityTree<Menu>.FindAllChildsByParent(pkey).ToList();
             }
         }
 
