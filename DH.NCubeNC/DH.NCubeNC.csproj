@@ -50,9 +50,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="4.12.2025.506" />
-    <PackageReference Include="DH.NIP" Version="4.12.2025.506" />
-    <PackageReference Include="DH.NStardust" Version="4.12.2025.506" />
+    <PackageReference Include="DH.NCode" Version="4.12.2025.529-beta1054" />
+    <PackageReference Include="DH.NIP" Version="4.12.2025.530-beta0137" />
+    <PackageReference Include="DH.NStardust" Version="4.12.2025.530-beta0211" />
   </ItemGroup>
 
   <ItemGroup>
