@@ -1,9 +1,13 @@
 ﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using NewLife.Cube.ViewModels;
+using NewLife.Log;
 using NewLife.Web;
+
 using XCode;
 using XCode.Membership;
 
@@ -60,6 +64,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             Data = list.ToList(),
             Page = p.ToModel(),
             Stat = (TEntity)p.State,
+            TraceId = DefaultSpan.Current?.TraceId,
         };
     }
 
