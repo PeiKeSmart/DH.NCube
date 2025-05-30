@@ -93,14 +93,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="Views\Shared\_Form_Item.cshtml.old" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="..\Doc\DH.png" Link="DH.png">
       <PackagePath>\</PackagePath>
     </Content>
-    <Content Include="Views\Shared\_Form_Item.cshtml.old" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Areas\Admin\Views\Shared\" />
