@@ -98,9 +98,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="Areas\Admin\Views\Shared\" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="Areas\Cube\Views\PrincipalAgent_LayuiAdmin\_Form_Body.cshtml" />
   </ItemGroup>
   <ItemGroup>
