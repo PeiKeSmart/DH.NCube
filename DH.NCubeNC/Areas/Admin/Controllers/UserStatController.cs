@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using NewLife.Cube.Charts;
+﻿using NewLife.Cube.Charts;
 using NewLife.Cube.Entity;
 using NewLife.Web;
+
 using XCode.Membership;
+
 using static NewLife.Cube.Entity.UserStat;
 
 namespace NewLife.Cube.Areas.Admin.Controllers;
@@ -44,6 +45,8 @@ public class UserStatController : ReadOnlyEntityController<UserStat>
             // 绘制平均线和最大最小值
             line3.SetMarkLine(true);
             line3.SetMarkPoint(true, true);
+
+            chart.SetToolbox();
         }
 
         return list;
