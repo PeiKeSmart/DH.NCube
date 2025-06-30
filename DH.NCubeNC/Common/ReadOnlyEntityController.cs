@@ -709,7 +709,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         try
         {
             await using var gs = new GZipStream(ms, CompressionLevel.Optimal, true);
-            var count = dal.Backup(fact.Table.DataTable, gs);
+            var count = dal.Backup(fact.Table.DataTable, gs, default);
 
             WriteLog("备份导出", true, $"备份[{name}]（{count:n0}行）成功！");
 
