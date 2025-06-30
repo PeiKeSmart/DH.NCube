@@ -48,6 +48,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="Entity\Config\**" />
+    <Compile Remove="Entity\Log\**" />
+    <Content Remove="Entity\Config\**" />
+    <Content Remove="Entity\Log\**" />
+    <EmbeddedResource Remove="Entity\Config\**" />
+    <EmbeddedResource Remove="Entity\Log\**" />
+    <None Remove="Entity\Config\**" />
+    <None Remove="Entity\Log\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="Areas\Cube\Controllers\ModelColumnController.cs" />
     <Compile Remove="Areas\Cube\Controllers\ModelTableController.cs" />
     <Compile Remove="Common\FormatType.cs" />
