@@ -77,7 +77,7 @@ public class Series : IExtend
         if (min) typeNames["min"] = "Min";
 
         //MarkPoint(typeNames);
-        MarkPoint = new { data = typeNames.Select(e => new { type = e.Key, name = e.Value }).ToArray() };
+        MarkLine = new { data = typeNames.Select(e => new { type = e.Key, name = e.Value }).ToArray() };
     }
 
     ///// <summary>标记点。例如最大最小值</summary>
