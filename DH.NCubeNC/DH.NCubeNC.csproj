@@ -133,6 +133,7 @@
     <Compile Include="..\DH.NCube\Web\OAuth\BaiduClient.cs" Link="Web\OAuth\BaiduClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\DingTalkClient.cs" Link="Web\OAuth\DingTalkClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\GithubClient.cs" Link="Web\OAuth\GithubClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\Id4Client.cs" Link="Web\OAuth\Id4Client.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\MicrosoftClient.cs" Link="Web\OAuth\MicrosoftClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\OpenWeixinClient.cs" Link="Web\OAuth\OpenWeixinClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\QQClient.cs" Link="Web\OAuth\QQClient.cs" />
