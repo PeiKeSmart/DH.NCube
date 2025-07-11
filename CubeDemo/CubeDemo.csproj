@@ -21,6 +21,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="SwaggerConfigureOptions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="DH.NStardust.Extensions" Version="4.12.2025.621-beta0339" />
   </ItemGroup>
 
