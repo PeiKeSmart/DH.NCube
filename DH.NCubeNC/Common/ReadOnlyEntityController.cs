@@ -5,11 +5,9 @@ using System.Reflection;
 using System.Text;
 using System.Web;
 using System.Xml.Serialization;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-
 using NewLife.Common;
 using NewLife.Cube.Charts;
 using NewLife.Cube.Entity;
@@ -22,7 +20,6 @@ using NewLife.Security;
 using NewLife.Serialization;
 using NewLife.Web;
 using NewLife.Xml;
-
 using XCode;
 using XCode.Configuration;
 using XCode.Membership;
@@ -709,7 +706,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         try
         {
             await using var gs = new GZipStream(ms, CompressionLevel.Optimal, true);
-            var count = dal.Backup(fact.Table.DataTable, gs, default);
+            var count = dal.Backup(fact.Table.DataTable, gs, HttpContext.RequestAborted);
 
             WriteLog("备份导出", true, $"备份[{name}]（{count:n0}行）成功！");
 
