@@ -53,6 +53,9 @@ public class ECharts : IExtend
     /// <summary>工具箱</summary>
     public Toolbox Toolbox { get; set; }
 
+    /// <summary>日历坐标系</summary>
+    public Calendar Calendar { get; set; }
+
     /// <summary>数据缩放</summary>
     public DataZoom[] DataZoom { get; set; }
 
@@ -383,25 +386,30 @@ public class ECharts : IExtend
         var sr = type switch
         {
             "line" => new SeriesLine { Type = type },
-            "line3D" => new SeriesLine3D { Type = type },
-            "lines" => new SeriesLines { Type = type },
-            "lines3D" => new SeriesLines3D { Type = type },
             "bar" => new SeriesBar { Type = type },
-            "bar3D" => new SeriesBar3D { Type = type },
             "pie" => new SeriesPie { Type = type },
-            "graph" => new SeriesGraph { Type = type },
             "scatter" => new SeriesScatter { Type = type },
-            "effectScatter" => new SeriesEffectScatter { Type = type },
-            "boxplot" => new SeriesBoxplot { Type = type },
+            "map" => new SeriesMap { Type = type },
+            "candlestick" => new SeriesCandlestick { Type = type },
             "radar" => new SeriesRadar { Type = type },
-            "funnel" => new SeriesFunnel { Type = type },
-            "gauge" => new SeriesGauge { Type = type },
+            "boxplot" => new SeriesBoxplot { Type = type },
             "heatmap" => new SeriesHeatmap { Type = type },
-            "sunburst" => new SeriesSunburst { Type = type },
+            "graph" => new SeriesGraph { Type = type },
+            "lines" => new SeriesLines { Type = type },
             "tree" => new SeriesTree { Type = type },
             "treemap" => new SeriesTreemap { Type = type },
+            "sunburst" => new SeriesSunburst { Type = type },
+            "parallel" => new SeriesParallel { Type = type },
             "sankey" => new SeriesSankey { Type = type },
-            "candlestick" => new SeriesCandlestick { Type = type },
+            "funnel" => new SeriesFunnel { Type = type },
+            "gauge" => new SeriesGauge { Type = type },
+            "pictorialBar" => new SeriesPictorialBar { Type = type },
+            "themeRiver" => new SeriesThemeRiver { Type = type },
+            "custom" => new SeriesCustom { Type = type },
+            "line3D" => new SeriesLine3D { Type = type },
+            "lines3D" => new SeriesLines3D { Type = type },
+            "bar3D" => new SeriesBar3D { Type = type },
+            "effectScatter" => new SeriesEffectScatter { Type = type },
             _ => new Series { Type = type },
         };
         sr.Name = name;
@@ -420,25 +428,30 @@ public class ECharts : IExtend
         var sr = type switch
         {
             SeriesTypes.Line => new SeriesLine(),
-            SeriesTypes.Line3D => new SeriesLine3D(),
-            SeriesTypes.Lines => new SeriesLines(),
-            SeriesTypes.Lines3D => new SeriesLines3D(),
             SeriesTypes.Bar => new SeriesBar(),
-            SeriesTypes.Bar3D => new SeriesBar3D(),
             SeriesTypes.Pie => new SeriesPie(),
-            SeriesTypes.Graph => new SeriesGraph(),
             SeriesTypes.Scatter => new SeriesScatter(),
-            SeriesTypes.EffectScatter => new SeriesEffectScatter(),
-            SeriesTypes.Boxplot => new SeriesBoxplot(),
+            SeriesTypes.Map => new SeriesMap(),
+            SeriesTypes.Candlestick => new SeriesCandlestick(),
             SeriesTypes.Radar => new SeriesRadar(),
-            SeriesTypes.Funnel => new SeriesFunnel(),
-            SeriesTypes.Gauge => new SeriesGauge(),
+            SeriesTypes.Boxplot => new SeriesBoxplot(),
+            SeriesTypes.Heatmap => new SeriesHeatmap(),
+            SeriesTypes.Graph => new SeriesGraph(),
+            SeriesTypes.Lines => new SeriesLines(),
             SeriesTypes.Tree => new SeriesTree(),
             SeriesTypes.Treemap => new SeriesTreemap(),
-            SeriesTypes.Heatmap => new SeriesHeatmap(),
             SeriesTypes.Sunburst => new SeriesSunburst(),
+            SeriesTypes.Parallel => new SeriesParallel(),
             SeriesTypes.Sankey => new SeriesSankey(),
-            SeriesTypes.Candlestick => new SeriesCandlestick(),
+            SeriesTypes.Funnel => new SeriesFunnel(),
+            SeriesTypes.Gauge => new SeriesGauge(),
+            SeriesTypes.PictorialBar => new SeriesPictorialBar(),
+            SeriesTypes.ThemeRiver => new SeriesThemeRiver(),
+            SeriesTypes.Custom => new SeriesCustom(),
+            SeriesTypes.Line3D => new SeriesLine3D(),
+            SeriesTypes.Lines3D => new SeriesLines3D(),
+            SeriesTypes.Bar3D => new SeriesBar3D(),
+            SeriesTypes.EffectScatter => new SeriesEffectScatter(),
             _ => new Series { Type = type.ToString().ToLower() },
         };
         sr.Name = name;

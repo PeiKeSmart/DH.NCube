@@ -1,16 +1,109 @@
 ﻿namespace NewLife.Cube.Charts;
 
-/// <summary>散点（气泡）图</summary>
+/// <summary>自定义系列</summary>
 /// <remark>
-/// 直角坐标系上的散点图可以用来展现数据的 x，y 之间的关系，如果数据项有多个维度，其它维度的值可以通过不同大小的 symbol 展现成气泡图，也可以用颜色来表现。这些可以配合 visualMap 组件完成。
-/// 可以应用在直角坐标系，极坐标系，地理坐标系上。
+/// 自定义系列可以自定义系列中的图形元素渲染。从而能扩展出不同的图表。
+/// 同时，echarts 会统一管理图形的创建删除、动画、与其他组件（如 dataZoom、visualMap）的联动，使开发者不必纠结这些细节。
+/// 例如，下面的例子使用 custom series 扩展出了 x-range 图：
+/// 更多的例子参见：custom examples
+/// 这里是个教程
+/// 开发者自定义渲染逻辑（renderItem 函数）
+/// custom 系列需要开发者自己提供图形渲染的逻辑。这个渲染逻辑一般命名为 renderItem。例如：
+/// var option = {
+///     ...,
+///     series: [{
+///         type: 'custom',
+///         renderItem: function (params, api) {
+///             var categoryIndex = api.value(0);
+///             var start = api.coord([api.value(1), categoryIndex]);
+///             var end = api.coord([api.value(2), categoryIndex]);
+///             var height = api.size([0, 1])[1] * 0.6;
+///             var rectShape = echarts.graphic.clipRectByRect({
+///                 x: start[0],
+///                 y: start[1] - height / 2,
+///                 width: end[0] - start[0],
+///                 height: height
+///             }, {
+///                 x: params.coordSys.x,
+///                 y: params.coordSys.y,
+///                 width: params.coordSys.width,
+///                 height: params.coordSys.height
+///             });
+///             return rectShape && {
+///                 type: 'rect',
+///                 shape: rectShape,
+///                 style: api.style()
+///             };
+///         },
+///         data: data
+///     }]
+/// }
+/// 对于 data 中的每个数据项（为方便描述，这里称为 dataItem)，会调用此 renderItem 函数。
+/// renderItem 函数提供了两个参数：
+/// params：包含了当前数据信息和坐标系的信息。
+/// api：是一些开发者可调用的方法集合。
+/// renderItem 函数须返回根据此 dataItem 绘制出的图形元素的定义信息，参见 renderItem.return。
+/// 一般来说，renderItem 函数的主要逻辑，是将 dataItem 里的值映射到坐标系上的图形元素。这一般需要用到 renderItem.arguments.api 中的两个函数：
+/// api.value(...)，意思是取出 dataItem 中的数值。例如 api.value(0) 表示取出当前 dataItem 中第一个维度的数值。
+/// api.coord(...)，意思是进行坐标转换计算。例如 var point = api.coord([api.value(0), api.value(1)]) 表示 dataItem 中的数值转换成坐标系上的点。
+/// 有时候还需要用到 api.size(...) 函数，表示得到坐标系上一段数值范围对应的长度。
+/// 返回值中样式的设置可以使用 api.style(...) 函数，他能得到 series.itemStyle 中定义的样式信息，以及视觉映射的样式信息。也可以用这种方式覆盖这些样式信息：api.style({fill: 'green', stroke: 'yellow'})。
+/// 维度的映射（encode 和 dimensions 属性）
+/// custom 系列往往需要定义 series.encode，主要用于指明 data 的哪些维度映射到哪些数轴上。从而，echarts 能根据这些维度的值的范围，画出合适的数轴刻度。
+/// 同时，encode.tooltip 和 encode.label 也可以被指定，指明默认的 tooltip 和 label 显示什么内容。series.dimensions 也可以被指定，指明显示在 tooltip 中的维度名称，或者维度的类型。
+/// 例如：
+/// series: {
+///     type: 'custom',
+///     renderItem: function () {
+///         ...
+///     },
+///     encode: {
+///         x: [2, 4, 3],
+///         y: 1,
+///         label: 0,
+///         tooltip: [2, 4, 3]
+///     }
+/// }
+/// 与 dataZoom 组件的结合
+/// 与 dataZoom 结合使用的时候，常常使用会设置 dataZoom.filterMode 为 'weakFilter'，从而让 dataItem 部分超出坐标系边界的时候，不会整体被过滤掉。
+/// 关于 dataIndex 和 dataIndexInside 的区别
+/// dataIndex 指的 dataItem 在原始数据中的 index。
+/// dataIndexInside 指的是 dataItem 在当前数据窗口（参见 dataZoom）中的 index。
+/// renderItem.arguments.api 中使用的参数都是 dataIndexInside 而非 dataIndex，因为从 dataIndex 转换成 dataIndexInside 需要时间开销。
+/// Event listener
+/// chart.setOption({
+///     // ...
+///     series: {
+///         type: 'custom',
+///         renderItem: function () {
+///             // ...
+///             return {
+///                 type: 'group',
+///                 children: [{
+///                     type: 'circle'
+///                     // ...
+///                 }, {
+///                     type: 'circle',
+///                     name: 'aaa',
+///                     // 用户指定的信息，可以在 event handler 访问到。
+///                     info: 12345,
+///                     // ...
+///                 }]
+///             };
+///         }
+///     }
+/// });
+/// chart.on('click', {element: 'aaa'}, function (params) {
+///     // 当 name 为 'aaa' 的图形元素被点击时，此回调被触发。
+///     console.log(params.info);
+/// });
 /// </remark>
-public class SeriesScatter : Series
+public class SeriesCustom : Series
 {
-    /// <summary>实例化散点图</summary>
-    public SeriesScatter() => Type = "scatter";
+    /// <summary>实例化自定义系列</summary>
+    public SeriesCustom() => Type = "custom";
 
-    //public String Type { get; set; } = "scatter";
+    //public String Type { get; set; } = "custom";
 
     ///// <summary>组件 ID</summary>
     ///// <remark>默认不指定。指定则可用于在 option 或者 API 中引用组件。</remark>
@@ -29,9 +122,14 @@ public class SeriesScatter : Series
     ///// </remark>
     //public String ColorBy { get; set; }
 
+    /// <summary>是否启用图例 hover 时的联动高亮</summary>
+    public Boolean? LegendHoverLink { get; set; }
+
     /// <summary></summary>
     /// <remark>
     /// 该系列使用的坐标系，可选：
+    /// null 或者 'none'
+    ///   无坐标系。
     /// 'cartesian2d'
     ///   使用二维的直角坐标系（也称笛卡尔坐标系），通过 xAxisIndex, yAxisIndex指定相应的坐标轴组件。
     /// 'polar'
@@ -40,6 +138,8 @@ public class SeriesScatter : Series
     ///   使用地理坐标系，通过 geoIndex 指定相应的地理坐标系组件。
     /// 'calendar'
     ///   使用日历坐标系，通过 calendarIndex 指定相应的日历坐标系组件。
+    /// 'none'
+    ///   不使用坐标系。
     /// </remark>
     public String CoordinateSystem { get; set; }
 
@@ -58,74 +158,53 @@ public class SeriesScatter : Series
     /// <summary>使用的日历坐标系的 index，在单个图表实例中存在多个日历坐标系的时候有用。</summary>
     public Double? CalendarIndex { get; set; }
 
-    /// <summary>是否启用图例 hover 时的联动高亮</summary>
-    public Boolean? LegendHoverLink { get; set; }
-
-    ///// <summary>标记的图形</summary>
-    ///// <remark>
-    ///// ECharts 提供的标记类型包括
-    ///// 'circle', 'rect', 'roundRect', 'triangle', 'diamond', 'pin', 'arrow', 'none'
-    ///// 可以通过 'image://url' 设置为图片，其中 URL 为图片的链接，或者 dataURI。
-    ///// URL 为图片链接例如：
-    ///// 'image://http://example.website/a/b.png'
-    ///// URL 为 dataURI 例如：
-    ///// 'image://data:image/gif;base64,R0lGODlhEAAQAMQAAORHHOVSKudfOulrSOp3WOyDZu6QdvCchPGolfO0o/XBs/fNwfjZ0frl3/zy7////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAkAABAALAAAAAAQABAAAAVVICSOZGlCQAosJ6mu7fiyZeKqNKToQGDsM8hBADgUXoGAiqhSvp5QAnQKGIgUhwFUYLCVDFCrKUE1lBavAViFIDlTImbKC5Gm2hB0SlBCBMQiB0UjIQA7'
-    ///// 可以通过 'path://' 将图标设置为任意的矢量路径。这种方式相比于使用图片的方式，不用担心因为缩放而产生锯齿或模糊，而且可以设置为任意颜色。路径图形会自适应调整为合适的大小。路径的格式参见 SVG PathData。可以从 Adobe Illustrator 等工具编辑导出。
-    ///// 例如：
-    ///// 'path://M30.9,53.2C16.8,53.2,5.3,41.7,5.3,27.6S16.8,2,30.9,2C45,2,56.4,13.5,56.4,27.6S45,53.2,30.9,53.2z M30.9,3.5C17.6,3.5,6.8,14.4,6.8,27.6c0,13.3,10.8,24.1,24.101,24.1C44.2,51.7,55,40.9,55,27.6C54.9,14.4,44.1,3.5,30.9,3.5z M36.9,35.8c0,0.601-0.4,1-0.9,1h-1.3c-0.5,0-0.9-0.399-0.9-1V19.5c0-0.6,0.4-1,0.9-1H36c0.5,0,0.9,0.4,0.9,1V35.8z M27.8,35.8 c0,0.601-0.4,1-0.9,1h-1.3c-0.5,0-0.9-0.399-0.9-1V19.5c0-0.6,0.4-1,0.9-1H27c0.5,0,0.9,0.4,0.9,1L27.8,35.8L27.8,35.8z'
-    ///// 如果需要每个数据的图形不一样，可以设置为如下格式的回调函数：
-    ///// (value: Array|number, params: Object) => string
-    ///// 其中第一个参数 value 为 data 中的数据值。第二个参数params 是其它的数据项参数。
-    ///// </remark>
-    //public String Symbol { get; set; }
-
-    /// <summary></summary>
+    /// <summary>custom 系列需要开发者自己提供图形渲染的逻辑</summary>
     /// <remark>
-    /// 标记的大小，可以设置成诸如 10 这样单一的数字，也可以用数组分开表示宽和高，例如 [20, 10] 表示标记宽为20，高为10。
-    /// 如果需要每个数据的图形大小不一样，可以设置为如下格式的回调函数：
-    /// (value: Array|number, params: Object) => number|Array
-    /// 其中第一个参数 value 为 data 中的数据值。第二个参数params 是其它的数据项参数。
+    /// 这个渲染逻辑一般命名为 renderItem。例如：
+    /// var option = {
+    ///     ...,
+    ///     series: [{
+    ///         type: 'custom',
+    ///         renderItem: function (params, api) {
+    ///             var categoryIndex = api.value(0);
+    ///             var start = api.coord([api.value(1), categoryIndex]);
+    ///             var end = api.coord([api.value(2), categoryIndex]);
+    ///             var height = api.size([0, 1])[1] * 0.6;
+    ///             var rectShape = echarts.graphic.clipRectByRect({
+    ///                 x: start[0],
+    ///                 y: start[1] - height / 2,
+    ///                 width: end[0] - start[0],
+    ///                 height: height
+    ///             }, {
+    ///                 x: params.coordSys.x,
+    ///                 y: params.coordSys.y,
+    ///                 width: params.coordSys.width,
+    ///                 height: params.coordSys.height
+    ///             });
+    ///             return rectShape && {
+    ///                 type: 'rect',
+    ///                 shape: rectShape,
+    ///                 style: api.style()
+    ///             };
+    ///         },
+    ///         data: data
+    ///     }]
+    /// }
+    /// 对于 data 中的每个数据项（为方便描述，这里称为 dataItem)，会调用此 renderItem 函数。
+    /// renderItem 函数提供了两个参数：
+    /// params：包含了当前数据信息和坐标系的信息。
+    /// api：是一些开发者可调用的方法集合。
+    /// renderItem 函数须返回根据此 dataItem 绘制出的图形元素的定义信息，参见 renderItem.return。
+    /// 一般来说，renderItem 函数的主要逻辑，是将 dataItem 里的值映射到坐标系上的图形元素。这一般需要用到 renderItem.arguments.api 中的两个函数：
+    /// api.value(...)，意思是取出 dataItem 中的数值。例如 api.value(0) 表示取出当前 dataItem 中第一个维度的数值。
+    /// api.coord(...)，意思是进行坐标转换计算。例如 var point = api.coord([api.value(0), api.value(1)]) 表示 dataItem 中的数值转换成坐标系上的点。
+    /// 有时候还需要用到 api.size(...) 函数，表示得到坐标系上一段数值范围对应的长度。
+    /// 返回值中样式的设置可以使用 api.style(...) 函数，他能得到 series.itemStyle 中定义的样式信息，以及视觉映射的样式信息。也可以用这种方式覆盖这些样式信息：api.style({fill: 'green', stroke: 'yellow'})。
     /// </remark>
-    public Object SymbolSize { get; set; }
+    public Object RenderItem { get; set; }
 
-    /// <summary>标记的旋转角度（而非弧度）</summary>
-    /// <remark>
-    /// 正值表示逆时针旋转。注意在 markLine 中当 symbol 为 'arrow' 时会忽略 symbolRotate 强制设置为切线的角度。
-    /// 如果需要每个数据的旋转角度不一样，可以设置为如下格式的回调函数：
-    /// (value: Array|number, params: Object) => number
-    /// 其中第一个参数 value 为 data 中的数据值。第二个参数params 是其它的数据项参数。
-    /// 从 4.8.0 开始支持回调函数。
-    /// </remark>
-    public Object SymbolRotate { get; set; }
-
-    /// <summary></summary>
-    /// <remark>如果 symbol 是 path:// 的形式，是否在缩放时保持该图形的长宽比。</remark>
-    public Boolean? SymbolKeepAspect { get; set; }
-
-    /// <summary>标记相对于原本位置的偏移</summary>
-    /// <remark>
-    /// 默认情况下，标记会居中置放在数据对应的位置，但是如果 symbol 是自定义的矢量路径或者图片，就有可能不希望 symbol 居中。这时候可以使用该配置项配置 symbol 相对于原本居中的偏移，可以是绝对的像素值，也可以是相对的百分比。
-    /// 例如 [0, '-50%'] 就是把自己向上移动了一半的位置，在 symbol 图形是气泡的时候可以让图形下端的箭头对准数据点。
-    /// </remark>
-    public Double[] SymbolOffset { get; set; }
-
-    /// <summary></summary>
-    /// <remark>
-    /// 是否开启大数据量优化，在数据图形特别多而出现卡顿时候可以开启。
-    /// 开启后配合 largeThreshold 在数据量大于指定阈值的时候对绘制进行优化。
-    /// 缺点：优化后不能自定义设置单个数据项的样式。
-    /// </remark>
-    public Boolean? Large { get; set; }
-
-    /// <summary>开启绘制优化的阈值</summary>
-    public Double? LargeThreshold { get; set; }
-
-    /// <summary>鼠标悬浮时在图形元素上时鼠标的样式是什么</summary>
-    /// <remark>同 CSS 的 cursor。</remark>
-    public String Cursor { get; set; }
-
-    /// <summary>图形上的文本标签，可用于说明图形的一些数据信息，比如值，名称等。</summary>
-    public Object Label { get; set; }
+    /// <summary>图形样式</summary>
+    public Object ItemStyle { get; set; }
 
     /// <summary></summary>
     /// <remark>
@@ -178,26 +257,6 @@ public class SeriesScatter : Series
     /// </remark>
     public Object LabelLayout { get; set; }
 
-    /// <summary>图形样式</summary>
-    public Object ItemStyle { get; set; }
-
-    /// <summary>高亮的图形和标签样式</summary>
-    public Object Emphasis { get; set; }
-
-    /// <summary></summary>
-    /// <remark>
-    /// 从 v5.0.0 开始支持
-    /// 淡出状态的配置。开启 emphasis.focus 后有效。
-    /// </remark>
-    public Object Blur { get; set; }
-
-    /// <summary></summary>
-    /// <remark>
-    /// 从 v5.0.0 开始支持
-    /// 选中状态的配置。开启 selectedMode 后有效。
-    /// </remark>
-    public Object Select { get; set; }
-
     /// <summary></summary>
     /// <remark>
     /// 从 v5.0.0 开始支持
@@ -205,17 +264,6 @@ public class SeriesScatter : Series
     /// 从 v5.3.0 开始支持 'series'。
     /// </remark>
     public Object SelectedMode { get; set; }
-
-    /// <summary></summary>
-    /// <remark>
-    /// 渐进式渲染时每一帧绘制图形数量，设为 0 时不启用渐进式渲染，支持每个系列单独配置。
-    /// 在图中有数千到几千万图形元素的时候，一下子把图形绘制出来，或者交互重绘的时候可能会造成界面的卡顿甚至假死。ECharts 4 开始全流程支持渐进渲染（progressive rendering），渲染的时候会把创建好的图形分到数帧中渲染，每一帧渲染只渲染指定数量的图形。
-    /// 该配置项就是用于配置该系列每一帧渲染的图形数，可以根据图表图形复杂度的需要适当调整这个数字使得在不影响交互流畅性的前提下达到绘制速度的最大化。比如在 lines 图或者平行坐标中线宽大于 1 的 polyline 绘制会很慢，这个数字就可以设置小一点，而线宽小于等于 1 的 polyline 绘制非常快，该配置项就可以相对调得比较大。
-    /// </remark>
-    public Double? Progressive { get; set; }
-
-    /// <summary>启用渐进式渲染的图形数量阈值，在单个系列的图形数量超过该阈值时启用渐进式渲染。</summary>
-    public Double? ProgressiveThreshold { get; set; }
 
     /// <summary></summary>
     /// <remark>
@@ -262,7 +310,7 @@ public class SeriesScatter : Series
     /// displayName: 一般用于 tooltip 中维度名的展示。string 如果没有指定，默认使用 name 来展示。
     /// 值得一提的是，当定义了 dimensions 后，默认 tooltip 中对个维度的显示，会变为『竖排』，从而方便显示每个维度的名称。如果没有定义 dimensions，则默认 tooltip 会横排显示，且只显示数值没有维度名称可显示。
     /// </remark>
-    public Double[] Dimensions { get; set; }
+    public double[] Dimensions { get; set; }
 
     /// <summary>可以定义 data 的哪个维度被编码成什么</summary>
     /// <remark>
@@ -373,7 +421,7 @@ public class SeriesScatter : Series
     ///     }
     /// };
     /// </remark>
-    public Object Encode { get; set; }
+    public object Encode { get; set; }
 
     /// <summary></summary>
     /// <remark>
@@ -491,15 +539,6 @@ public class SeriesScatter : Series
     /// </remark>
     public override Object[] Data { get; set; }
 
-    ///// <summary>图表标注</summary>
-    //public Object MarkPoint { get; set; }
-
-    ///// <summary>图表标线</summary>
-    //public Object MarkLine { get; set; }
-
-    /// <summary>图表标域，常用于标记图表中某个范围的数据，例如标出某段时间投放了广告。</summary>
-    public Object MarkArea { get; set; }
-
     /// <summary></summary>
     /// <remark>
     /// 从 v4.4.0 开始支持
@@ -515,14 +554,14 @@ public class SeriesScatter : Series
     /// </remark>
     public Boolean? Clip { get; set; }
 
-    /// <summary>散点图所有图形的 zlevel 值</summary>
+    /// <summary>自定义图所有图形的 zlevel 值</summary>
     /// <remark>
     /// zlevel用于 Canvas 分层，不同zlevel值的图形会放置在不同的 Canvas 中，Canvas 分层是一种常见的优化手段。我们可以把一些图形变化频繁（例如有动画）的组件设置成一个单独的zlevel。需要注意的是过多的 Canvas 会引起内存开销的增大，在手机端上需要谨慎使用以防崩溃。
     /// zlevel 大的 Canvas 会放在 zlevel 小的 Canvas 的上面。
     /// </remark>
     public Double? Zlevel { get; set; }
 
-    /// <summary>散点图组件的所有图形的z值</summary>
+    /// <summary>自定义图组件的所有图形的z值</summary>
     /// <remark>
     /// 控制图形的前后顺序。z值小的图形会被z值大的图形覆盖。
     /// z相比zlevel优先级更低，而且不会创建新的 Canvas。
