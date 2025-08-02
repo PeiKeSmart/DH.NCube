@@ -60,6 +60,14 @@ public class UserStatController : ReadOnlyEntityController<UserStat>
                 """);
 
             chart.SetToolbox();
+
+            var chart2 = new ECharts();
+            chart2.SetX(list2, "Date", e => e.Date.ToString("MM-dd"));
+            //chart2.SetY("用户数", "value");
+
+            chart2.AddBoxplot(list2.Select(e => new BoxplotItem(e.News, e.NewsT7, e.Actives, e.ActivesT7, e.ActivesT30)));
+
+            ViewBag.Charts2 = new[] { chart2 };
         }
 
         return list;
