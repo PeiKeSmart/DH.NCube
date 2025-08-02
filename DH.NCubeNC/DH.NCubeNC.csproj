@@ -32,7 +32,7 @@
     <RepositoryUrl>https://github.com/PeiKeSmart/DH.NCube</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>湖北登灏科技有限公司;DH组件;DH;$(AssemblyName)</PackageTags>
-    <PackageReleaseNotes>改进ECharts图表</PackageReleaseNotes>
+    <PackageReleaseNotes>升级ECharts增加大量系列图；增强可扩展字段功能，支持一行数据的Json/Xml字段在表单页展开为独立Tab页</PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
