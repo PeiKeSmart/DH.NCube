@@ -1,4 +1,5 @@
 ﻿using NewLife.Cube.Charts;
+using NewLife.Cube.Charts.Models;
 using NewLife.Cube.Entity;
 using NewLife.Web;
 
