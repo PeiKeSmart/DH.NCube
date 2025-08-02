@@ -49,7 +49,7 @@ public class XAxis
     /// 'log'
     ///   对数轴。适用于对数数据。对数轴下的堆积柱状图或堆积折线图可能带来很大的视觉误差，并且在一定情况下可能存在非预期效果，应避免使用。
     /// </remark>
-    public String Type { get; set; } = "category";
+    public String Type { get; set; }="category";
 
     /// <summary>坐标轴名称</summary>
     public String Name { get; set; }
