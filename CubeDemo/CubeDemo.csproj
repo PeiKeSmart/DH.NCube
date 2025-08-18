@@ -29,10 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\DH.NCube.Swagger\DH.NCube.Swagger.csproj" />
     <ProjectReference Include="..\DH.NCube\DH.NCube.csproj" />
   </ItemGroup>
