@@ -55,6 +55,7 @@ public class UserController : EntityController<User, UserModel>
             df.DataVisible = entity => !(entity as User).Avatar.IsNullOrEmpty();
             // 使用ILinkExtend，高度定制头像超链接
             df.AddService(new MyAvatar());
+            df.Title = "{Remark}";
         }
         {
             var df = ListFields.GetField("Name") as ListField;
@@ -65,6 +66,7 @@ public class UserController : EntityController<User, UserModel>
             var df = ListFields.GetField("DisplayName") as ListField;
             df.Url = "/Admin/User/Edit?id={ID}";
             df.Target = "_blank";
+            df.Title = "{Remark}";
         }
 
         {
@@ -504,7 +506,7 @@ public class UserController : EntityController<User, UserModel>
     /// <returns>返回pKey和publicKey</returns>
     [AllowAnonymous]
     [HttpGet]
-    public IActionResult GetLoginKey(String token)
+    public ActionResult GetLoginKey(String token)
     {
         if (ManageProvider.User != null)
         {
