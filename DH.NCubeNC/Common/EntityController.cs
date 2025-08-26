@@ -306,7 +306,7 @@ public partial class EntityController<TEntity, TModel>
 
         return act switch
         {
-            "Sync" => Backup(),
+            "Backup" => await Backup(),
             _ => await base.Develop(act),
         };
     }
