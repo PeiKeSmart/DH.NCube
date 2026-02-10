@@ -1,0 +1,36 @@
+<Solution>
+  <Folder Name="/MVC主题/">
+    <Project Path="DH.NCube.AdminLTE/DH.NCube.AdminLTE.csproj" />
+    <Project Path="DH.NCube.Blazor/DH.NCube.Blazor.csproj" />
+    <Project Path="DH.NCube.ElementUI/DH.NCube.ElementUI.csproj" />
+    <Project Path="DH.NCube.LayuiAdmin/DH.NCube.LayuiAdmin.csproj" />
+    <Project Path="DH.NCube.Metronic/DH.NCube.Metronic.csproj" />
+    <Project Path="DH.NCube.Metronic8/DH.NCube.Metronic8.csproj" />
+    <Project Path="DH.NCube.Tabler/DH.NCube.Tabler.csproj" />
+  </Folder>
+  <Folder Name="/MVC版/">
+    <Project Path="CubeDemoNC/CubeDemoNC.csproj" />
+    <Project Path="CubeSSO/CubeSSO.csproj" />
+    <Project Path="DH.NCubeNC/DH.NCubeNC.csproj" />
+  </Folder>
+  <Folder Name="/Others/">
+    <File Path=".editorconfig" />
+    <File Path=".github/copilot-instructions.md" />
+    <File Path=".github/workflows/publish-beta.yml" />
+    <File Path=".github/workflows/publish.yml" />
+    <File Path=".github/workflows/test.yml" />
+    <File Path=".gitignore" />
+    <File Path="global.json" />
+    <File Path="NuGet.config" />
+    <File Path="Readme.MD" />
+  </Folder>
+  <Folder Name="/WebApi版/">
+    <Project Path="CubeDemo/CubeDemo.csproj" />
+    <Project Path="DH.NCube.Swagger/DH.NCube.Swagger.csproj" />
+    <Project Path="DH.NCube/DH.NCube.csproj" />
+  </Folder>
+  <Folder Name="/测试/">
+    <Project Path="Test/Test.csproj" />
+    <Project Path="XUnitTest/XUnitTest.csproj" />
+  </Folder>
+</Solution>
