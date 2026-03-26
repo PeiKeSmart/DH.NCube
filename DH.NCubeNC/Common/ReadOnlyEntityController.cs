@@ -626,7 +626,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
 
         return act switch
         {
-            "Sync" => await Backup(),
+            "Backup" => Backup(),
             "BackupAndExport" => await BackupAndExport(),
             "Restore" => Restore(),
             "Share" => Share(),
@@ -644,7 +644,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     /// <summary>备份到服务器本地目录</summary>
     /// <returns></returns>
     [NonAction]
-    public virtual async Task<ActionResult> Backup()
+    public virtual ActionResult Backup()
     {
         try
         {
@@ -661,17 +661,35 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             var bak = NewLife.Setting.Current.BackupPath.CombinePath(fileName).GetBasePath();
             bak.EnsureDirectory(true);
 
-            WriteLog("备份", true, $"开始备份[{name}]到[{fileName}]");
+            // 异步执行备份，阻塞等待一点时间，避免前端超时。
+            var task = Task.Run(() =>
+            {
+                WriteLog("备份", true, $"开始备份[{name}]到[{fileName}]");
+                try
+                {
+                    var rs = 0;
+                    var sw = Stopwatch.StartNew();
+                    {
+                        using var fs = new FileStream(bak, FileMode.OpenOrCreate);
+                        using var gs = new GZipStream(fs, CompressionLevel.SmallestSize, true);
+                        rs = dal.Backup(fact.Table.DataTable, gs, default);
+                        sw.Stop();
+                    }
 
-            var sw = Stopwatch.StartNew();
-            await using var fs = new FileStream(bak, FileMode.OpenOrCreate);
-            await using var gs = new GZipStream(fs, CompressionLevel.Optimal, true);
-            var rs = dal.Backup(fact.Table.DataTable, gs, HttpContext.RequestAborted);
-            sw.Stop();
-
-            WriteLog("备份", true, $"备份[{name}]到[{fileName}]（{rs:n0}行）成功！耗时：{sw.Elapsed}");
-
-            return Json(0, $"备份[{fileName}]（{rs:n0}行）成功！");
+                    var fi = fileName.AsFile();
+                    WriteLog("备份", true, $"备份[{name}]到[{fileName}]（{rs:n0}行）（{fi.Length.ToGMK()}字节）成功！耗时：{sw.Elapsed}");
+                    return rs;
+                }
+                catch (Exception ex)
+                {
+                    WriteLog("备份", false, $"备份[{fileName}]失败！{ex.GetMessage()}");
+                    return -1;
+                }
+            });
+            if (task.Wait(5_000))
+                return Json(0, $"备份[{fileName}]（{task.Result:n0}行）成功！");
+            else
+                return Json(0, $"备份[{fileName}]后台执行中……");
         }
         catch (Exception ex)
         {
