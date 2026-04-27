@@ -5,9 +5,11 @@ using System.Reflection;
 using System.Text;
 using System.Web;
 using System.Xml.Serialization;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+
 using NewLife.Common;
 using NewLife.Cube.Charts;
 using NewLife.Cube.Entity;
@@ -21,6 +23,7 @@ using NewLife.Security;
 using NewLife.Serialization;
 using NewLife.Web;
 using NewLife.Xml;
+
 using XCode;
 using XCode.Configuration;
 using XCode.Membership;
@@ -403,7 +406,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
                 }
             }
 
-            return new ExcelResult { Fields = GetFields(fs, list), Data = list };
+            return new ExcelResult { Fields = GetFields(fs, list), Data = list, HttpContext = HttpContext };
         }
         catch (Exception ex)
         {
@@ -520,11 +523,11 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             }
         }
 
-        var name = GetAttachment(null, ".xls", true);
+        var name = GetAttachment(null, ".xlsx", true);
 
         var list = ExportData();
 
-        return new ExcelResult { Fields = GetFields(fs, list), Data = list, AttachmentName = name };
+        return new ExcelResult { Fields = GetFields(fs, list), Data = list, AttachmentName = name, HttpContext = HttpContext };
     }
 
     /// <summary>导出Excel模板</summary>
@@ -569,11 +572,11 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             }
         }
 
-        var name = GetAttachment(null, ".xls", true);
+        var name = GetAttachment(null, ".xlsx", true);
 
         var list = ExportData(1);
 
-        return new ExcelResult { Fields = GetFields(fs, list), Data = list, AttachmentName = name };
+        return new ExcelResult { Fields = GetFields(fs, list), Data = list, AttachmentName = name, HttpContext = HttpContext };
     }
 
     /// <summary>导出Csv</summary>
