@@ -116,6 +116,7 @@
     <Compile Include="..\DH.NCube\Extensions\Pager.cs" Link="Extensions\Pager.cs" />
     <Compile Include="..\DH.NCube\Extensions\PagerHelper.cs" Link="Extensions\PagerHelper.cs" />
     <Compile Include="..\DH.NCube\Extensions\WebHelper.cs" Link="Extensions\WebHelper.cs" />
+    <Compile Include="..\DH.NCube\Models\ImportContext.cs" Link="Models\ImportContext.cs" />
     <Compile Include="..\DH.NCube\Models\TokenInModel.cs" Link="Models\TokenInModel.cs" />
     <Compile Include="..\DH.NCube\Services\TokenService.cs" Link="Services\TokenService.cs" />
     <Compile Include="..\DH.NCube\Web\AttachmentProvider.cs" Link="Web\AttachmentProvider.cs" />
