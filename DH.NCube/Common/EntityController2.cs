@@ -2,7 +2,6 @@
 using System.IO.Compression;
 using System.Reflection.PortableExecutable;
 using System.Text;
-using System.Xml.Serialization;
 using NewLife.Cube.Entity;
 using NewLife.Cube.Models;
 using NewLife.Cube.ViewModels;
@@ -350,8 +349,9 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
         // 判断已有数据，如果没有直接插入，如果较少则合并，否则Upsert
         if (factory.Session.Count == 0) return list.Insert();
 
-        if (factory.Session.Count < 10000 && factory.Unique != null)
-            return factory.FindAll().Merge(list, [factory.Unique.Name], false).Count;
+        var uk = factory.Unique;
+        if (factory.Session.Count < 10000 && uk != null)
+            return factory.FindAll().Merge(list, (o, n) => Equals(o[uk.Name], n[uk.Name]), false, false).Count;
 
         return list.Upsert();
     }
