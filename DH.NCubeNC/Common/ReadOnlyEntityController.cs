@@ -156,8 +156,9 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     {
         var url = Request.GetReferer();
 
-        var p = Session[CacheKey] as Pager;
-        p = new Pager(p);
+        //var p = Session[CacheKey] as Pager;
+        //p = new Pager(p);
+        var p = GetCachePager();
         if (p != null && p.Params.Count > 0) return Json(500, "当前带有查询参数，为免误解，禁止全表清空！");
 
         try
@@ -676,7 +677,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
                         sw.Stop();
                     }
 
-                    var fi = fileName.AsFile();
+                    var fi = bak.AsFile();
                     WriteLog("备份", true, $"备份[{name}]到[{fileName}]（{rs:n0}行）（{fi.Length.ToGMK()}字节）成功！耗时：{sw.Elapsed}");
                     return rs;
                 }
@@ -725,10 +726,14 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         var ms = Response.Body;
         try
         {
-            await using var gs = new GZipStream(ms, CompressionLevel.Optimal, true);
-            var count = dal.Backup(fact.Table.DataTable, gs, HttpContext.RequestAborted);
+            WriteLog("备份导出", true, $"开始备份导出[{name}]");
 
-            WriteLog("备份导出", true, $"备份[{name}]（{count:n0}行）成功！");
+            var sw = Stopwatch.StartNew();
+            await using var gs = new GZipStream(ms, CompressionLevel.SmallestSize, true);
+            var count = dal.Backup(fact.Table.DataTable, gs, HttpContext.RequestAborted);
+            sw.Stop();
+
+            WriteLog("备份导出", true, $"备份[{name}]（{count:n0}行）成功！耗时：{sw.Elapsed}");
 
             return new EmptyResult();
         }
@@ -760,12 +765,31 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             var fi = di?.GetFiles(fileName)?.OrderByDescending(e => e.Name).FirstOrDefault();
             if (fi == null || !fi.Exists) throw new XException($"找不到[{fileName}]的备份文件");
 
-            using var fs = fi.OpenRead();
-            var rs = dal.Restore(fs, fact.Table.DataTable, HttpContext.RequestAborted);
+            // 异步执行恢复，阻塞等待一点时间，避免前端超时。
+            var task = Task.Run(() =>
+            {
+                WriteLog("恢复", true, $"开始恢复[{fileName}]到[{name}]（{fi.Length.ToGMK()}字节）");
+                try
+                {
+                    var sw = Stopwatch.StartNew();
+                    using var fs = fi.OpenRead();
+                    var rs = dal.Restore(fs, fact.Table.DataTable, default);
+                    sw.Stop();
 
-            WriteLog("恢复", true, $"恢复[{fileName}]（{rs:n0}行）成功！");
+                    WriteLog("恢复", true, $"恢复[{fileName}]（{rs:n0}行）成功！");
+                    return rs;
+                }
+                catch (Exception ex)
+                {
+                    WriteLog("恢复", false, $"恢复[{fileName}]失败！{ex.GetMessage()}");
+                    return -1;
+                }
+            });
 
-            return JsonRefresh($"恢复[{fileName}]（{rs:n0}行）成功！", 2);
+            if (task.Wait(5_000))
+                return JsonRefresh($"恢复[{fileName}]（{task.Result:n0}行）成功！", 2);
+            else
+                return Json(0, $"恢复[{fileName}]后台执行中……", 2);
         }
         catch (Exception ex)
         {
@@ -789,11 +813,13 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         var userId = ManageProvider.User.ID;
         var list = UserToken.Search(null, userId, true, DateTime.Now, DateTime.MinValue, null);
 
-        var p = Session[CacheKey] as Pager;
-        p = new Pager(p)
-        {
-            RetrieveTotalCount = false,
-        };
+        //var p = Session[CacheKey] as Pager;
+        //p = new Pager(p)
+        //{
+        //    RetrieveTotalCount = false,
+        //};
+        var p = GetCachePager();
+        p.RetrieveTotalCount = false;
 
         // 构造url
         var cs = GetControllerAction();

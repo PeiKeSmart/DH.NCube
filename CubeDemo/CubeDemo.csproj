@@ -6,7 +6,7 @@
     <Description>猿人易前后端分离版本的后端WebApi</Description>
     <Company>湖北登灏科技有限公司</Company>
     <Copyright>©2020-2026 湖北登灏科技有限公司</Copyright>
-    <VersionPrefix>4.17</VersionPrefix>
+    <VersionPrefix>4.22</VersionPrefix>
     <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
     <Version>$(VersionPrefix).$(VersionSuffix)</Version>
     <FileVersion>$(Version)</FileVersion>
@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NStardust.Extensions" Version="4.14.2025.903-beta1224" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.21.2026.326-beta0835" />
   </ItemGroup>
 
   <ItemGroup>

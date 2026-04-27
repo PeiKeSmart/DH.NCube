@@ -17,6 +17,6 @@
     <None Remove="Entity\**" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="4.14.2025.902-beta1235" />
+    <PackageReference Include="DH.NCode" Version="4.22.2026.412-beta0533" />
   </ItemGroup>
 </Project>

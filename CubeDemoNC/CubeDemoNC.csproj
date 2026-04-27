@@ -7,7 +7,7 @@
     <AssemblyTitle>猿人易演示平台</AssemblyTitle>
     <Company>湖北登灏科技有限公司</Company>
     <Copyright>©2020-2026 湖北登灏科技有限公司</Copyright>
-    <VersionPrefix>4.17</VersionPrefix>
+    <VersionPrefix>4.22</VersionPrefix>
     <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
     <Version>$(VersionPrefix).$(VersionSuffix)</Version>
     <FileVersion>$(Version)</FileVersion>
@@ -37,9 +37,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BootstrapBlazor" Version="9.10.0" />
-    <PackageReference Include="DH.NRedis.Extensions" Version="4.14.2025.826-beta0407" />
-    <PackageReference Include="DH.NStardust.Extensions" Version="4.14.2025.903-beta1224" />
+    <PackageReference Include="BootstrapBlazor" Version="10.5.0" />
+    <PackageReference Include="DH.NRedis.Extensions" Version="4.21.2026.326-beta0856" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.21.2026.326-beta0835" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="9.0.8" />
   </ItemGroup>
 
