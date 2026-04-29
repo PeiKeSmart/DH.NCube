@@ -32,7 +32,7 @@
     <RepositoryUrl>https://github.com/PeiKeSmart/DH.NCube</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>湖北登灏科技有限公司;DH组件;DH;$(AssemblyName)</PackageTags>
-    <PackageReleaseNotes>增加Zip导入导出；增加标准Excel导出</PackageReleaseNotes>
+    <PackageReleaseNotes>增加Zip导入导出；增加标准Excel导出；删除和分享增加_query隐藏参数</PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -53,6 +53,7 @@
     <PackageReference Include="DH.NCode" Version="4.22.2026.412-beta0533" />
     <PackageReference Include="DH.NIP" Version="4.21.2026.305-beta0044" />
     <PackageReference Include="DH.NStardust" Version="4.21.2026.326-beta0835" />
+    <PackageReference Include="Pek.Office" Version="4.22.2026.419-beta0908" />
   </ItemGroup>
 
   <ItemGroup>

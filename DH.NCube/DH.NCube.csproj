@@ -115,6 +115,7 @@
     <PackageReference Include="DH.NCode" Version="4.22.2026.412-beta0533" />
     <PackageReference Include="DH.NIP" Version="4.21.2026.305-beta0044" />
     <PackageReference Include="DH.NStardust" Version="4.21.2026.326-beta0835" />
+    <PackageReference Include="Pek.Office" Version="4.22.2026.419-beta0908" />
   </ItemGroup>
 
   <ItemGroup>
