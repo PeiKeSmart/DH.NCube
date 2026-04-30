@@ -13,6 +13,7 @@ using NewLife.Reflection;
 using NewLife.Web;
 using XCode;
 using XCode.Membership;
+
 using static XCode.Membership.User;
 
 namespace NewLife.Cube.Areas.Admin.Controllers;
@@ -273,8 +274,8 @@ public class UserController : EntityController<User, UserModel>
                 if (errors > 0) _cache.Remove(key);
                 if (ipErrors > 0) _cache.Remove(ipKey);
 
-                var token = HttpContext.IssueToken(provider.Current, TimeSpan.FromSeconds(set.TokenExpire));
-                return Json(0, "ok", new { /*provider.Current.ID,*/ Token = token });
+                var tokens = HttpContext.IssueTokenAndRefreshToken(provider.Current, TimeSpan.FromSeconds(set.TokenExpire));
+                return Json(0, "ok", new { Token = tokens.Item1, RefreshToken = tokens.Item2 });
             }
 
             // 如果我们进行到这一步时某个地方出错，则重新显示表单
@@ -306,6 +307,21 @@ public class UserController : EntityController<User, UserModel>
         model.OAuthItems = OAuthConfig.GetVisibles();
 
         return Json(0, null, model);
+    }
+
+    /// <summary>刷新令牌</summary>
+    /// <returns></returns>
+    [HttpPost]
+    [AllowAnonymous]
+    public ActionResult RefreshToken(RefreshTokenModel refreshTokenModel)
+    {
+        var userName = refreshTokenModel.UserName;
+        var refreshToken = refreshTokenModel.RefreshToken;
+        var user = ManageProvider.Provider.FindByName(userName);
+
+        var tokens = HttpContext.RefreshToken(user, refreshToken);
+
+        return Json(0, "ok", new { Token = tokens.Item1, RefreshToken = tokens.Item2 });
     }
 
     /// <summary>注销</summary>
