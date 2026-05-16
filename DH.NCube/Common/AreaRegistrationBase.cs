@@ -1,9 +1,12 @@
 ﻿using System.Collections.Concurrent;
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Controllers;
+
 using NewLife.Cube.Membership;
 using NewLife.Log;
+
 using XCode;
 using XCode.Membership;
 
@@ -47,7 +50,7 @@ public class AreaBase : AreaAttribute, IApiDescriptionGroupNameProvider
         }
 
         // 自动检查并添加菜单
-        var task = Task.Run(() =>
+        var task = Task.Factory.StartNew(() =>
         {
             using var span = DefaultTracer.Instance?.NewSpan(nameof(ScanController), areaType.FullName);
             try
@@ -59,7 +62,7 @@ public class AreaBase : AreaAttribute, IApiDescriptionGroupNameProvider
                 span?.SetError(ex, null);
                 XTrace.WriteException(ex);
             }
-        });
+        }, TaskCreationOptions.LongRunning);
         task.Wait(5_000);
     }
 
@@ -94,13 +97,13 @@ public class AreaBase : AreaAttribute, IApiDescriptionGroupNameProvider
         }
 
         // 再次检查菜单权限，因为上面的ScanController里开启菜单权限检查时，菜单可能还没有生成
-        var task = Task.Run(() =>
+        var task = Task.Factory.StartNew(() =>
         {
             //Thread.Sleep(1000);
             //XTrace.WriteLine("二次检查功能菜单权限，双重保障");
             //typeof(Role).Invoke("CheckRole");
             Role.CheckRole();
-        });
+        }, TaskCreationOptions.LongRunning);
         task.Wait(1_000);
 
         XTrace.WriteLine("end---------初始化[{0}]的菜单体系---------end", areaName);
