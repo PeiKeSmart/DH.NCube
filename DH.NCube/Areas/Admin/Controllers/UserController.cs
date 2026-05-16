@@ -466,11 +466,8 @@ public class UserController : EntityController<User, UserModel>
         //ViewBag.StatusMessage = "修改成功！";
         //return Ok(ViewBag.StatusMessage);
 
-
         var res = "".ToOkApiResponse();
         return Json(res.Code, res.Message, res.Data);
-        return this.Json(0, null, "修改成功！");
-
     }
 
     /// <summary>用户绑定</summary>
