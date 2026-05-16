@@ -3,7 +3,6 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Web;
 using System.Xml.Serialization;
-
 using NewLife.Cube.Entity;
 using NewLife.Log;
 using NewLife.Model;
