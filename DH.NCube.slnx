@@ -1,12 +1,21 @@
 <Solution>
   <Folder Name="/MVC主题/">
     <Project Path="DH.NCube.AdminLTE/DH.NCube.AdminLTE.csproj" />
+    <Project Path="DH.NCube.Angular/DH.NCube.Angular.csproj" />
+    <Project Path="DH.NCube.ArcoVue/DH.NCube.ArcoVue.csproj" />
     <Project Path="DH.NCube.Blazor/DH.NCube.Blazor.csproj" />
     <Project Path="DH.NCube.ElementUI/DH.NCube.ElementUI.csproj" />
     <Project Path="DH.NCube.LayuiAdmin/DH.NCube.LayuiAdmin.csproj" />
     <Project Path="DH.NCube.Metronic/DH.NCube.Metronic.csproj" />
     <Project Path="DH.NCube.Metronic8/DH.NCube.Metronic8.csproj" />
+    <Project Path="DH.NCube.MUI/DH.NCube.MUI.csproj" />
+    <Project Path="DH.NCube.NaiveUI/DH.NCube.NaiveUI.csproj" />
+    <Project Path="DH.NCube.Shadcn/DH.NCube.Shadcn.csproj" />
+    <Project Path="DH.NCube.Svelte/DH.NCube.Svelte.csproj" />
     <Project Path="DH.NCube.Tabler/DH.NCube.Tabler.csproj" />
+    <Project Path="DH.NCube.TDesign/DH.NCube.TDesign.csproj" />
+    <Project Path="DH.NCube.Vue/DH.NCube.Vue.csproj" />
+    <Project Path="DH.NCube.Vuetify/DH.NCube.Vuetify.csproj" />
   </Folder>
   <Folder Name="/MVC版/">
     <Project Path="CubeDemoNC/CubeDemoNC.csproj" />
@@ -30,6 +39,8 @@
     <Project Path="DH.NCube/DH.NCube.csproj" />
   </Folder>
   <Folder Name="/测试/">
+    <Project Path="DH.NCube.Tests/DH.NCube.Tests.csproj" />
+    <Project Path="E2EMvcTest/E2EMvcTest.csproj" />
     <Project Path="Test/Test.csproj" />
     <Project Path="XUnitTest/XUnitTest.csproj" />
   </Folder>

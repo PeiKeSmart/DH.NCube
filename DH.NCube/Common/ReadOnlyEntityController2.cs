@@ -1,6 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Reflection;
+using NewLife.AI.Models;
+using NewLife.Collections;
 using NewLife.Common;
+using NewLife.Cube.AI;
 using NewLife.Cube.ViewModels;
 using NewLife.Log;
 using NewLife.Reflection;
@@ -124,6 +127,36 @@ public partial class ReadOnlyEntityController<TEntity>
         return Search(p);
     }
 
+    /// <summary>搜索数据，支持数据权限。免查总数时多取一条探测是否存在下一页</summary>
+    /// <param name="p">分页参数</param>
+    /// <param name="needCount">是否查询总记录数。false时跳过SelectCount，改由探测判断下一页</param>
+    /// <param name="hasNext">是否存在下一页。免查总数模式下由多取一条的结果判断</param>
+    /// <returns></returns>
+    protected virtual IEnumerable<TEntity> SearchData(Pager p, Boolean needCount, out Boolean hasNext)
+    {
+        if (needCount)
+        {
+            p.RetrieveTotalCount = true;
+            hasNext = false;
+            return SearchData(p);
+        }
+
+        // 免查总数：多取一条探测下一页，随后裁掉探测行，避免列表多出一行
+        // 注意用StartRow固定本页偏移，避免PageSize+1导致XCode按(PageIndex-1)*PageSize重新计算偏移而跳过数据
+        var pageSize = p.PageSize;
+        var startRow = p.StartRow;
+        p.StartRow = startRow >= 0 ? startRow : (p.PageIndex - 1) * pageSize;
+        p.PageSize = pageSize + 1;
+        var list = SearchData(p).ToList();
+        p.PageSize = pageSize;
+        p.StartRow = startRow;
+
+        hasNext = list.Count > pageSize;
+        if (hasNext) list.RemoveAt(list.Count - 1);
+
+        return list;
+    }
+
     /// <summary>查找单行数据</summary>
     /// <param name="key"></param>
     /// <returns></returns>
@@ -180,7 +213,7 @@ public partial class ReadOnlyEntityController<TEntity>
     /// <summary>查找单行数据，并判断数据权限</summary>
     /// <param name="key"></param>
     /// <returns></returns>
-    protected TEntity FindData(Object key)
+    protected virtual TEntity FindData(Object key)
     {
         // 先查出来，再判断数据权限
         var entity = Find(key);
@@ -211,14 +244,49 @@ public partial class ReadOnlyEntityController<TEntity>
 
         // 多租户
         var set = CubeSetting.Current;
-        if (set.EnableTenant)
+        if (set.EnableTenant && IsTenantSource)
         {
             var ctxTenant = TenantContext.Current;
-            if (ctxTenant != null && IsTenantSource)
+
+            // 无租户上下文（未设置/匿名请求）：
+            // [TenantCompat] 影子期规则A：不加租户过滤（等同多租户开启前），仅记录影子日志；
+            // Enforce 严格 fail-closed，返回 1=0 空集，防止无租户场景看到全量数据。
+            if (ctxTenant.GetTenantMode() == TenantMode.None)
             {
-                var tenant = Tenant.FindById(ctxTenant.TenantId);
-                if (tenant != null)
+                if (set.TenantEnforceMode == TenantEnforceModes.Shadow)
                 {
+                    XTrace.WriteLine($"[TenantCompat] 无租户上下文，兼容放行不加过滤：{typeof(TEntity).Name}");
+                    // 数据日志（CreateLog 落库）；无租户上下文场景用户信息非重点
+                    ManagerProviderHelper.WriteTenantCompatDataLog("影子兼容放行", $"无租户上下文，兼容放行不加过滤 实体[{typeof(TEntity).Name}]", null, HttpContext.Connection.RemoteIpAddress + "");
+                }
+                else if (set.TenantQueryPolicy == TenantQueryPolicies.ThrowOnMissingTenant)
+                {
+                    // 对外 API 可配置为显式抛错，而不是"假空数据"（P2-7）
+                    throw new NoPermissionException(PermissionFlags.None, $"缺少租户上下文，禁止查询{typeof(TEntity).Name}");
+                }
+                else
+                {
+                    XTrace.WriteLine($"多租户模式下缺少租户上下文，禁止查询{typeof(TEntity).Name}");
+                    exp = "1=0";
+                }
+            }
+            else if (ctxTenant.GetTenantMode() == TenantMode.AdminBackend)
+            {
+                // 管理后台模式，不限制租户数据，管理后台要能看到所有租户的数据
+            }
+            else
+            {
+                // 租户模式（TenantId>0）：校验租户存在且启用，无效则 fail-closed，防止伪造租户ID绕过数据隔离
+                var tenant = ctxTenant.Tenant;
+                tenant ??= Tenant.FindById(ctxTenant.TenantId);
+                if (tenant == null || !tenant.Enable)
+                {
+                    XTrace.WriteLine($"多租户模式下租户[{ctxTenant.TenantId}]不存在或已禁用，禁止查询{typeof(TEntity).Name}");
+                    exp = "1=0";
+                }
+                else
+                {
+                    // WhereBuilder 内部会从 HttpContext.Items 读取 TenantId
                     HttpContext.Items["TenantId"] = tenant.Id;
 
                     if (typeof(TEntity) == typeof(Tenant))
@@ -253,7 +321,7 @@ public partial class ReadOnlyEntityController<TEntity>
     }
 
     /// <summary>是否租户实体类</summary>
-    protected virtual Boolean IsTenantSource => typeof(TEntity).GetInterfaces().Any(e => e == typeof(ITenantSource));
+    protected virtual Boolean IsTenantSource => typeof(TEntity).GetInterfaces().Any(e => e == typeof(ITenantScope));
 
     /// <summary>获取选中键</summary>
     /// <returns></returns>
@@ -272,12 +340,13 @@ public partial class ReadOnlyEntityController<TEntity>
             p.Parse(queryData);
             return p;
         }
-        else
-        {
-            // 计算目标数据量。不能破坏缓存对象，需要new一个新对象
-            var p = Session[CacheKey] as Pager;
-            return new Pager(p);
-        }
+
+        // 会话缓存（MVC 版 Index 写入当前查询条件）
+        if (Session[CacheKey] is Pager sp) return new Pager(sp);
+
+        // 前后端分离 API 模式无会话缓存，直接使用当前请求参数（与 DeleteAll 一致），
+        // 使导出基于当前查询条件全量导出，而非整表
+        return new Pager(request);
     }
 
     /// <summary>多次导出数据</summary>
@@ -422,6 +491,89 @@ public partial class ReadOnlyEntityController<TEntity>
     }
     #endregion
 
+    #region AI 对话
+    // AI 对话端点已统一收拢到全局 AiController（/Ai/AiChat）。
+    // 本控制器实现 IEntityAiContext 能力接口，向全局端点提供数据查询（SearchData）、工具集（CreateCubeTools）与提示词（BuildChatSystemPrompt）等重载点。
+
+    /// <summary>创建 AI 工具集。二次开发者可重载，返回自定义工具集以调整 AI 使用的数据逻辑</summary>
+    /// <remarks>
+    /// 默认工具集 <see cref="CubeTools{TEntity}"/> 提供数据上下文、表单 Schema、回填表单等能力。
+    /// 重载时通常继承 <see cref="CubeTools{TEntity}"/> 并重写其 virtual 工具方法
+    /// （GetDataContext / GetFormSchema / FillForm），或重写数据收集方法（GetListContext / GetRecordContext），
+    /// 或返回全新的 IToolProvider 实现。数据查询委托默认走 SearchData（保留子类重载与数据权限）。
+    /// </remarks>
+    /// <param name="pager">当前查询条件（可为空）</param>
+    /// <param name="entityId">当前记录编号</param>
+    /// <returns>AI 工具集</returns>
+    protected virtual CubeTools<TEntity> CreateCubeTools(Pager? pager, Int64 entityId)
+        => new CubeTools<TEntity>(Factory, pager, entityId, p => SearchData(p).ToList());
+
+    /// <summary>构建 AI 对话系统提示词，注入当前页面上下文</summary>
+    /// <param name="req">对话请求</param>
+    /// <param name="pager">当前查询条件</param>
+    /// <returns></returns>
+    protected virtual String BuildChatSystemPrompt(AiChatRequest req, Pager? pager)
+    {
+        var tb = Factory.Table.DataTable;
+        var name = Factory.EntityType.GetDisplayName() ?? tb.DisplayName ?? Factory.EntityType.Name;
+        // 系统名称取系统设置里的配置，空值时兜底为默认名称
+        var sysName = SysConfig?.DisplayName;
+        if (sysName.IsNullOrEmpty()) sysName = "魔方后台管理系统";
+
+        var sb = Pool.StringBuilder.Get();
+        sb.AppendLine($"你是{sysName}的 AI 助手，正在协助管理员操作当前页面。");
+        sb.AppendLine();
+        sb.AppendLine($"当前实体：{name}（表 {tb.TableName}）");
+        if (!tb.Description.IsNullOrEmpty()) sb.AppendLine($"实体说明：{tb.Description}");
+        var pageName = "列表页";
+        if (req is CubeAiChatRequest cubeReq)
+        {
+            // 页面字段由魔方请求（CubeAiChatRequest）承载，NAI 通用请求不含
+            pageName = cubeReq.Page switch
+            {
+                "form" => cubeReq.Mode.EqualIgnoreCase("edit") ? "编辑表单" : "新增表单",
+                "detail" => "详情页",
+                _ => "列表页",
+            };
+        }
+        sb.AppendLine($"页面类型：{pageName}");
+        if (req is CubeAiChatRequest cube && cube.Id > 0) sb.AppendLine($"当前记录编号：{cube.Id}");
+        if (pager != null && pager.Params.Count > 0)
+        {
+            sb.AppendLine("当前查询条件：");
+            foreach (var kv in pager.Params.Where(e => !e.Key.EqualIgnoreCase("_query", "Sort", "Desc", "PageIndex", "PageSize")))
+            {
+                sb.AppendLine($"- {kv.Key}: {kv.Value}");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("可用工具：get_data_context / get_form_schema / fill_form / get_page_context / get_system_info / run_js（详细说明见函数定义，按需调用）");
+        sb.AppendLine();
+        sb.AppendLine("规则：");
+        sb.AppendLine("1. 使用简体中文回答，语言简洁专业");
+        sb.AppendLine("2. 用户要求分析/洞察当前数据或单条记录时，先调用 get_data_context 获取数据，再给出分析结论与建议");
+        sb.AppendLine("3. 用户要求新建/填写/补全表单时，先调用 get_form_schema 了解字段，再调用 fill_form 生成值（对 Value 为 null 的可填字段，若适合自动生成如编码 Code 类，应生成合理唯一值；对已有值的字段保持原值；不要编造邮箱/手机/生日等真实个人数据），最后提示用户检查后提交");
+        sb.AppendLine("4. 用户询问当前页面结构/页面元素（表格列、分页、可见数据行等 DOM 层信息）时，调用 get_page_context 采集浏览器当前页面内容");
+        sb.AppendLine("5. 用户询问系统状态/诊断时，调用 get_system_info");
+        sb.AppendLine("6. 用户要求读取或操作当前页面元素（填写输入框、点击按钮、读取标题等）时，可调用 run_js 执行 JavaScript；脚本在用户浏览器当前页面执行，可用 document.querySelector 等定位元素；修改页面内容或提交表单等写操作前，先向用户说明将执行的操作");
+        sb.AppendLine("7. 不要编造数据；信息不足时主动询问用户澄清");
+
+        return sb.Return(true);
+    }
+
+    #region 能力接口
+    // IEntityAiContext：向全局 AiController 暴露实体 AI 重载点（仿 IPageDataContext 能力接口模式），子类重载经 virtual 委托生效
+    IEntityFactory IEntityAiContext.Factory => Factory;
+
+    IEnumerable<Object> IEntityAiContext.SearchData(Pager p) => SearchData(p).Cast<Object>();
+
+    Object IEntityAiContext.CreateCubeTools(Pager? pager, Int64 entityId) => CreateCubeTools(pager, entityId);
+
+    String IEntityAiContext.BuildChatSystemPrompt(AiChatRequest req, Pager? pager) => BuildChatSystemPrompt(req, pager);
+    #endregion
+    #endregion
+
     #region 实体操作重载
     /// <summary>验证实体对象</summary>
     /// <param name="entity">实体对象</param>
@@ -451,6 +603,30 @@ public partial class ReadOnlyEntityController<TEntity>
                 case DataObjectMethodType.Update when (entity as IEntity).HasDirty:
                     LogProvider.Provider.WriteLog(type + "", entity);
                     break;
+            }
+        }
+
+        // 多租户写路径归属校验：租户模式下，租户实体的新增/修改/删除必须归属当前租户
+        if (post && CubeSetting.Current.EnableTenant && IsTenantSource)
+        {
+            var tenantId = TenantContext.CurrentId;
+            if (tenantId.GetTenantMode() == TenantMode.Tenant)
+            {
+                var ie = entity as IEntity;
+                var entityTenantId = ie?["TenantId"].ToInt() ?? 0;
+                switch (type)
+                {
+                    case DataObjectMethodType.Insert:
+                        // 新增强制归属当前租户
+                        if (ie != null) ie["TenantId"] = tenantId;
+                        break;
+                    case DataObjectMethodType.Update:
+                    case DataObjectMethodType.Delete:
+                        // 修改/删除校验归属，防止跨租户操作
+                        if (entityTenantId != tenantId)
+                            throw new NoPermissionException(PermissionFlags.None, $"无权操作其它租户的数据[{entityTenantId}]");
+                        break;
+                }
             }
         }
 
@@ -507,6 +683,10 @@ public partial class ReadOnlyEntityController<TEntity>
             _ => ListFields,
         };
         fields = fields.Clone();
+
+        // 未开启多租户时，隐藏租户字段（TenantId/TenantName），列表/表单/搜索/详情均生效
+        if (!CubeSetting.Current.EnableTenant)
+            fields.RemoveField("TenantId", "TenantName");
 
         // 表单嵌入配置字段
         if ((kind == ViewKinds.EditForm || kind == ViewKinds.Detail) && model is TEntity entity)

@@ -1,0 +1,38 @@
+@model EntityField
+@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+@{
+    var entity = Model.Entity;
+    var field = Model.Field;
+
+    var err = 0;
+    if (ViewData.ModelState.TryGetValue(field.Name, out var st) && st != null) { err = st.Errors.Count; }
+
+    var des = field.Description.TrimPrefix(field.DisplayName).TrimPrefix(",", ".", "，", "。");
+}
+<label class="control-label col-xs-12 col-sm-2 col-lg-1 text-ellipsis" title="@field.DisplayName">@field.DisplayName</label>
+
+@if (err > 0)
+{
+    <span class="col-xs-12 col-sm-10 col-lg-11 alert alert-danger">
+        @Html.ValidationMessage(field.Name)
+    </span>
+}
+else if (!des.IsNullOrEmpty())
+{
+    <span class="col-xs-12 col-sm-10 col-lg-11 text-ellipsis" title="@des"><span class="middle">@des</span></span>
+}
+
+<div class="input-group col-xs-12 col-sm-10 col-lg-11">
+    @if (field.ReadOnly)
+    {
+        <textarea class="form-control" id="@field.Name" rows="8" readonly>@(entity[field.Name] + "")</textarea>
+    }
+    else
+    {
+        @await Html.PartialAsync("_MarkdownEditor", new ItemModel(field.Name, entity[field.Name], field.Type))
+    }
+</div>
+

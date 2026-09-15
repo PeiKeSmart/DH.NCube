@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Razor;
 using NewLife.Cube.Entity;
 using NewLife.Cube.ViewModels;
 using NewLife.Reflection;
+using NewLife.Security;
 using NewLife.Web;
 using XCode;
 using XCode.Configuration;
@@ -65,7 +66,7 @@ public static class ViewHelper
         if (shardField != null)
         {
             var value = entity[shardField.Name];
-            if (value is DateTime dt) value = dt.ToFullString("").TrimEnd(" 00:00:00");
+            if (value is DateTime dt) value = dt.ToFullString("").TrimSuffix(" 00:00:00");
 
             rv[shardField.Name] = value;
         }
@@ -179,6 +180,7 @@ public static class ViewHelper
             // 缩进
             sb.Append(ident);
 
+            var df = item as ListField;
             var name = item.MapField ?? item.Name;
             var des = item.DisplayName ?? item.Name;
 
@@ -186,7 +188,7 @@ public static class ViewHelper
             sb.Append(@"<th class=""text-center""");
 
             // 固定宽度
-            if (item.Type == typeof(DateTime) && item.Services.Count == 0)
+            if (item.Type == typeof(DateTime) && item.Services.Count == 0 && df?.GetValue == null)
             {
                 var width = item.ItemType == "Date" ? 80 : 134;
                 sb.AppendFormat(@" style=""min-width:{0}px;""", width);
@@ -222,47 +224,53 @@ public static class ViewHelper
             sb.Append(ident);
             //sb.AppendLine(@"@Html.Partial(""_List_Data_Item"", new Pair(entity, item))");
             if (item.PrimaryKey)
-                sb.AppendFormat(@"<td class=""text-center"">@entity.{0}</td>", item.Name);
+                sb.AppendFormat("""<td class="text-center">@entity.{0}</td>""", item.Name);
             else
             {
                 switch (Type.GetTypeCode(item.Type))
                 {
                     case TypeCode.Boolean:
-                        sb.AppendLine(@"<td class=""text-center"">");
+                        sb.AppendLine("""<td class="text-center">""");
                         sb.Append(ident);
-                        sb.AppendFormat(@"    <i class=""glyphicon glyphicon-@(entity.{0} ? ""ok"" : ""remove"")"" style=""color: @(entity.{0} ? ""green"" : ""red"");""></i>", item.Name);
+                        sb.AppendFormat("""    <i class="glyphicon glyphicon-@(entity.{0} ? "ok" : "remove")" style="color: @(entity.{0} ? "green" : "red");"></i>""", item.Name);
                         sb.AppendLine();
                         sb.Append(ident);
                         sb.Append(@"</td>");
                         break;
                     case TypeCode.DateTime:
                         if (name2.EndsWith("Date"))
-                            sb.AppendFormat(@"<td class=""text-center"">@entity.{0}.ToString(""yyyy-MM-dd"")</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-center">@entity.{0}.ToString("yyyy-MM-dd")</td>""", item.Name);
                         else
-                            sb.AppendFormat(@"<td class=""text-center"">@entity.{0}.ToFullString("""")</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-center">@entity.{0}.ToFullString("")</td>""", item.Name);
                         break;
                     case TypeCode.Decimal:
-                        sb.AppendFormat(@"<td class=""text-right"">@entity.{0}.ToString(""n2"")</td>", item.Name);
+                        sb.AppendFormat("""<td class="text-right">@entity.{0}.ToString("n2")</td>""", item.Name);
                         break;
                     case TypeCode.Single:
                     case TypeCode.Double:
                         if (item.ItemType.EqualIgnoreCase("percent", "Percentage"))
                         {
+                            var scale = item.Scale;
                             var des = item.Description + "";
+                            if (des.Contains("十分之一")) scale += 1;
+                            if (des.Contains("百分之一")) scale += 2;
+                            if (des.Contains("千分之一")) scale += 3;
+                            if (des.Contains("万分之一")) scale += 4;
+                            scale = scale >= 2 ? scale - 2 : 0;
                             if (des.Contains("十分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("百分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 100).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 100).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("千分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 1000).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 1000).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("万分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10000).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10000).ToString("p{1}"))</td>""", item.Name, scale);
                             else
-                                sb.AppendFormat(@"<td class=""text-center"">@entity.{0}.ToString(""p2"")</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@entity.{0}.ToString("p{1}")</td>""", item.Name, scale);
                         }
                         else
                         {
-                            sb.AppendFormat(@"<td class=""text-right"">@entity.{0}.ToString(""n2"")</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-right">@entity.{0}.ToString("n2")</td>""", item.Name);
                         }
                         break;
                     case TypeCode.Byte:
@@ -274,25 +282,31 @@ public static class ViewHelper
                     case TypeCode.UInt64:
                         // 特殊处理枚举
                         if (item.Type.IsEnum)
-                            sb.AppendFormat(@"<td class=""text-center"">@entity.{0}</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-center">@entity.{0}</td>""", item.Name);
                         else if (item.Name.EqualIgnoreCase("CreateUserID", "UpdateUserID"))
                             BuildUser(item, sb);
                         else if (item.ItemType.EqualIgnoreCase("percent", "Percentage"))
                         {
+                            var scale = item.Scale;
                             var des = item.Description + "";
+                            if (des.Contains("十分之一")) scale += 1;
+                            if (des.Contains("百分之一")) scale += 2;
+                            if (des.Contains("千分之一")) scale += 3;
+                            if (des.Contains("万分之一")) scale += 4;
+                            scale = scale >= 2 ? scale - 2 : 0;
                             if (des.Contains("十分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10d).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("百分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 100d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 100d).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("千分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 1000d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 1000d).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("万分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10000d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10000d).ToString("p{1}"))</td>""", item.Name, scale);
                             else
-                                sb.AppendFormat(@"<td class=""text-center"">@entity.{0}.ToString(""p2"")</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@entity.{0}.ToString("p{1}")</td>""", item.Name, scale);
                         }
                         else
-                            sb.AppendFormat(@"<td class=""text-right"">@entity.{0}.ToString(""n0"")</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-right">@entity.{0}.ToString("n0")</td>""", item.Name);
                         break;
                     case TypeCode.String:
                         if (!item.MapField.IsNullOrEmpty())
@@ -300,7 +314,11 @@ public static class ViewHelper
                             if (item.MapProvider != null)
                             {
                                 var prv = item.MapProvider;
-                                sb.AppendFormat(@"<td><a href=""{1}?{2}=@entity.{3}"">@entity.{0}</a></td>", item.Name, prv.EntityType.Name, prv.Key, item.MapField);
+                                // 从注册表获取含 Area 前缀的完整路径，避免 /User?ID=... 缺少 Area 前缀
+                                var pageInfo = EntityPageRegistry.Get(prv.EntityType);
+                                var linkUrl = pageInfo?.Url ?? ("/" + prv.EntityType.Name);
+                                var pkName = pageInfo?.PrimaryKey ?? prv.Key;
+                                sb.AppendFormat(@"<td><a href=""{1}?{2}=@entity.{3}"">@entity.{0}</a></td>", item.Name, linkUrl, pkName, item.MapField);
                             }
                             else
                             {
@@ -366,21 +384,27 @@ public static class ViewHelper
                     case TypeCode.Double:
                         if (item.ItemType.EqualIgnoreCase("percent", "Percentage"))
                         {
+                            var scale = item.Scale;
                             var des = item.Description + "";
+                            if (des.Contains("十分之一")) scale += 1;
+                            if (des.Contains("百分之一")) scale += 2;
+                            if (des.Contains("千分之一")) scale += 3;
+                            if (des.Contains("万分之一")) scale += 4;
+                            scale = scale >= 2 ? scale - 2 : 0;
                             if (des.Contains("十分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("百分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 100).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 100).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("千分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 1000).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 1000).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("万分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10000).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10000).ToString("p{1}"))</td>""", item.Name, scale);
                             else
-                                sb.AppendFormat(@"<td class=""text-center"">@entity.{0}.ToString(""p2"")</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@entity.{0}.ToString("p{1}")</td>""", item.Name, scale);
                         }
                         else
                         {
-                            sb.AppendFormat(@"<td class=""text-right"">@entity.{0}.ToString(""n2"")</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-right">@entity.{0}.ToString("n2")</td>""", item.Name);
                         }
                         //sb.AppendFormat(@"<td class=""text-right"">@entity.{0:n2}</td>", item.Name);
                         break;
@@ -398,20 +422,26 @@ public static class ViewHelper
                             sb.Append(@"<td></td>");
                         else if (item.ItemType.EqualIgnoreCase("percent", "Percentage"))
                         {
+                            var scale = item.Scale;
                             var des = item.Description + "";
+                            if (des.Contains("十分之一")) scale += 1;
+                            if (des.Contains("百分之一")) scale += 2;
+                            if (des.Contains("千分之一")) scale += 3;
+                            if (des.Contains("万分之一")) scale += 4;
+                            scale = scale >= 2 ? scale - 2 : 0;
                             if (des.Contains("十分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10d).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("百分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 100d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 100d).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("千分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 1000d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 1000d).ToString("p{1}"))</td>""", item.Name, scale);
                             else if (des.Contains("万分之一"))
-                                sb.AppendFormat(@"<td class=""text-center"">@((entity.{0} / 10000d).ToString(""p2""))</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@((entity.{0} / 10000d).ToString("p{1}"))</td>""", item.Name, scale);
                             else
-                                sb.AppendFormat(@"<td class=""text-center"">@entity.{0}.ToString(""p2"")</td>", item.Name);
+                                sb.AppendFormat("""<td class="text-center">@entity.{0}.ToString("p{1}")</td>""", item.Name, scale);
                         }
                         else
-                            sb.AppendFormat(@"<td class=""text-right"">@entity.{0}.ToString(""n0"")</td>", item.Name);
+                            sb.AppendFormat("""<td class="text-right">@entity.{0}.ToString("n0")</td>""", item.Name);
                         break;
                     case TypeCode.String:
                     default:
@@ -566,7 +596,7 @@ public static class ViewHelper
 
     private static void BuildFormItem(DataField field, StringBuilder sb, IEntityFactory fact)
     {
-        var des = field.Description.TrimStart(field.DisplayName).TrimStart(",", ".", "，", "。");
+        var des = field.Description.TrimPrefix(field.DisplayName).TrimPrefix(",", ".", "，", "。");
 
         var err = 0;
 
@@ -843,7 +873,7 @@ public static class ViewHelper
         var paths = new[] { "/Content/images/logo/", "/Content/Logo/" };
         foreach (var item in paths)
         {
-            var p = item.TrimStart("/");
+            var p = item.TrimPrefix("/");
             p = CubeSetting.Current.WebRootPath.CombinePath(p);
 
             var di = p.AsDirectory();
@@ -875,17 +905,16 @@ public static class ViewHelper
 
         var fact = ManageProvider.Menu;
         var menus = fact.Root.Childs;
-        if (user?.Role != null)
-        {
-            menus = fact.GetMySubMenus(fact.Root.ID, user, true);
-        }
 
         // 如果顶级只有一层，并且至少有三级目录，则提升一级
         if (menus.Count == 1 && menus[0].Childs.All(m => m.Childs.Count > 0)) { menus = menus[0].Childs; }
 
         var menuTree = MenuTree.GetMenuTree(pMenuTree =>
         {
-            var subMenus = fact.GetMySubMenus(pMenuTree.ID, user, true);
+            // 左侧菜单展示所有可见菜单，不按角色权限过滤
+            // 权限控制在 Controller/Action 层通过 EntityAuthorizeAttribute 实现
+            var parent = fact.FindByID(pMenuTree.ID);
+            var subMenus = parent?.Childs?.Where(m => m.Visible).ToList() as IList<IMenu> ?? [];
             return subMenus;
         }, list =>
         {
@@ -947,6 +976,30 @@ public static class ViewHelper
             return $"/cube/image?id={attachment.Id}{attachment.Extension}";
 
         return $"/cube/file?id={attachment.Id}{attachment.Extension}";
+    }
+
+    /// <summary>获取附件分享Url。为指定附件创建临时分享令牌，返回可供未登录用户在有效期内访问的链接。有效期由 ShareExpire 配置控制（默认 7200 秒）</summary>
+    /// <param name="attachment">附件对象</param>
+    /// <param name="userId">分享者用户编号；若为 0 则退化为普通附件Url</param>
+    /// <returns>含 token 参数的分享链接，例如 /Cube/File?id=12345.pdf&amp;token=abcd1234</returns>
+    public static String GetAttachmentShareUrl(Attachment attachment, Int32 userId)
+    {
+        if (attachment == null) return null;
+        if (userId <= 0) return GetAttachmentUrl(attachment);
+
+        var url = $"attachment:{attachment.Id}";
+        var list = UserToken.FindAllByUserID(userId);
+        var ut = list.FirstOrDefault(e => e.Url.EqualIgnoreCase(url) && e.Enable && e.Expire > DateTime.Now);
+        ut ??= new UserToken { UserID = userId, Url = url };
+
+        if (ut.Token.IsNullOrEmpty()) ut.Token = Rand.NextString(8);
+        ut.Enable = true;
+        ut.Expire = DateTime.Now.AddSeconds(CubeSetting.Current.ShareExpire);
+        ut.Save();
+
+        var ext = attachment.Extension;
+        if (!ext.IsNullOrEmpty() && !ext.StartsWith(".")) ext = "." + ext;
+        return $"/Cube/File?id={attachment.Id}{ext}&token={ut.Token}";
     }
 
     /// <summary>是否附件列</summary>

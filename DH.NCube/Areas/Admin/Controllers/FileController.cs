@@ -9,8 +9,9 @@ namespace NewLife.Cube.Areas.Admin.Controllers;
 /// <summary>文件管理</summary>
 [DisplayName("文件")]
 [EntityAuthorize(PermissionFlags.Detail)]
+[FileManagerAuthorize]
 [AdminArea]
-[Menu(28, false, Icon = "fa-file")]
+[Menu(28, false, Icon = "Files")]
 public class FileController : ControllerBaseX
 {
     #region 构造
@@ -116,14 +117,14 @@ public class FileController : ControllerBaseX
         return size;
     }
 
-    private String GetFullName(String r) => r.TrimStart(Root).TrimStart(Root.TrimEnd(Path.DirectorySeparatorChar + ""));
+    private String GetFullName(String r) => r.TrimPrefix(Root).TrimPrefix(Root.TrimEnd(Path.DirectorySeparatorChar));
     #endregion
 
     #region 列表&删除
     /// <summary>文件管理主视图</summary>
     /// <returns></returns>
     [EntityAuthorize(PermissionFlags.Detail)]
-    [HttpGet("/[area]/[controller]")]
+    [HttpGet("/api/[area]/[controller]")]
     public ActionResult Index(String r, String sort, String message = "")
     {
         var di = GetDirectory(r) ?? Root.AsDirectory();
@@ -262,7 +263,6 @@ public class FileController : ControllerBaseX
     /// <returns></returns>
     [HttpPost]
     [EntityAuthorize(PermissionFlags.Insert)]
-    [HttpPost]
     public async Task<ActionResult> Upload(String r, IFormFile file)
     {
         if (file != null)
@@ -270,7 +270,9 @@ public class FileController : ControllerBaseX
             var di = GetDirectory(r) ?? Root.AsDirectory();
             if (di == null) throw new Exception("找不到目录！");
 
-            var dest = di.FullName.CombinePath(file.FileName);
+            // 防目录穿越：仅取文件名，丢弃客户端可控的路径部分
+            var name = Path.GetFileName(file.FileName);
+            var dest = di.FullName.CombinePath(name);
             WriteLog("上传", true, dest);
 
             dest.EnsureDirectory(true);
@@ -297,7 +299,9 @@ public class FileController : ControllerBaseX
                 var di = GetDirectory(r) ?? Root.AsDirectory();
                 if (di == null) throw new Exception("找不到目录！");
 
-                var dest = di.FullName.CombinePath(file.FileName);
+                // 防目录穿越：仅取文件名，丢弃客户端可控的路径部分
+                var name = Path.GetFileName(file.FileName);
+                var dest = di.FullName.CombinePath(name);
                 WriteLog("上传", true, dest);
 
                 dest.EnsureDirectory(true);
@@ -340,7 +344,9 @@ public class FileController : ControllerBaseX
                 var di = path.AsDirectory();
                 if (di == null) throw new Exception("找不到目录！");
 
-                var dest = di.FullName.CombinePath(file.FileName);
+                // 防目录穿越：仅取文件名，丢弃客户端可控的路径部分
+                var name = Path.GetFileName(file.FileName);
+                var dest = di.FullName.CombinePath(name);
                 WriteLog("上传", true, dest);
 
                 dest.EnsureDirectory(true);

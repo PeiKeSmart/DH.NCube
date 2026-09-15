@@ -83,6 +83,16 @@ public class EntityAuthorizeAttribute : Attribute, IAuthorizationFilter
         if (!AuthorizeCore(filterContext.HttpContext, menu, out var user))
         {
             HandleUnauthorizedRequest(filterContext, menu, user);
+            return;
+        }
+
+        // 多租户模式隔离：租户模式禁止访问纯Admin菜单，管理后台禁止访问纯Tenant菜单
+        var set = CubeSetting.Current;
+        if (set.EnableTenant && menu != null && TenantContext.Current.GetTenantMode() != TenantMode.None)
+        {
+            var isTenant = TenantContext.Current.GetTenantMode() == TenantMode.Tenant;
+            if (!MenuHelper.CheckVisible(ctrl.ControllerTypeInfo, isTenant))
+                HandleUnauthorizedRequest(filterContext, menu, user);
         }
     }
 
@@ -155,11 +165,14 @@ public class EntityAuthorizeAttribute : Attribute, IAuthorizationFilter
         //var ctrl = act.ControllerDescriptor;
         var type = act.ControllerTypeInfo;
         var fullName = type.FullName + "." + act.ActionName;
-        var url = filterContext.HttpContext.Request.Path + "";
+        // WebAPI版实体/后台控制器路由固定 /api 前缀，菜单存前端路由，查找前去掉 /api
+        var url = NewLife.Web.WebHelper.TrimApiPrefix(filterContext.HttpContext.Request.Path + "");
 
         var ctx = filterContext.HttpContext;
         var mf = ManageProvider.Menu;
-        if (ctx.Items["CurrentMenu"] is not IMenu menu)
+        var menu = ManageProvider.CurrentMenu;
+        menu ??= ctx.Items["CurrentMenu"] as IMenu;
+        if (menu == null)
         {
             menu = mf.FindByFullName(fullName) ?? mf.FindByFullName(type.FullName) ?? mf.FindByUrl(url) ?? mf.FindByUrl("~" + url);
 
@@ -170,8 +183,13 @@ public class EntityAuthorizeAttribute : Attribute, IAuthorizationFilter
                 menu = mf.FindByUrl(url2);
             }
 
-            // 兼容旧版本视图权限
-            ctx.Items["CurrentMenu"] = menu;
+            if (menu != null)
+            {
+                ManageProvider.CurrentMenu = menu;
+
+                // 兼容旧版本视图权限
+                ctx.Items["CurrentMenu"] = menu;
+            }
         }
 
         // 创建菜单
@@ -188,13 +206,14 @@ public class EntityAuthorizeAttribute : Attribute, IAuthorizationFilter
     private static readonly ConcurrentDictionary<String, Type> _ss = new ConcurrentDictionary<String, Type>();
     private Boolean CreateMenu(Type type)
     {
-        if (!_ss.TryAdd(type.Namespace, type)) return false;
+        // 按类型全名防重，避免同一命名空间下多个控制器（如 Admin 下的 UserController/ReactController）互相阻塞，导致独立类库控制器菜单被删后无法重建
+        if (!_ss.TryAdd(type.FullName, type)) return false;
 
         using var span = DefaultTracer.Instance?.NewSpan(nameof(CreateMenu), type.FullName);
 
         var mf = ManageProvider.Menu;
-        //var ms = mf.ScanController(type.Namespace.TrimEnd(".Controllers"), type.Assembly, type.Namespace);
-        var ms = MenuHelper.ScanController(mf, type.Namespace.TrimEnd(".Controllers"), type);
+        //var ms = mf.ScanController(type.Namespace.TrimSuffix(".Controllers"), type.Assembly, type.Namespace);
+        var ms = MenuHelper.ScanController(mf, type.Namespace.TrimSuffix(".Controllers"), type);
 
         var root = mf.FindByFullName(type.Namespace);
         if (root != null)
@@ -217,7 +236,8 @@ public class EntityAuthorizeAttribute : Attribute, IAuthorizationFilter
             foreach (var method in ctype.GetMethods())
             {
                 if (method.IsStatic || !method.IsPublic) continue;
-                if (!method.ReturnType.As<ActionResult>()) continue;
+                // 取消判断返回值类型，避免 ObjectController/ConfigController 的 Update 返回 TObject 而生成不了修改权限项（对齐 MenuHelper.ScanActionMenu）
+                //if (!method.ReturnType.As<ActionResult>()) continue;
                 if (method.GetCustomAttribute<AllowAnonymousAttribute>() != null) continue;
 
                 var att = method.GetCustomAttribute<EntityAuthorizeAttribute>();
@@ -230,7 +250,7 @@ public class EntityAuthorizeAttribute : Attribute, IAuthorizationFilter
                 }
             }
 
-            controller.Url = "~/" + ctype.Name.TrimEnd("Controller");
+            controller.Url = "~/" + ctype.Name.TrimSuffix("Controller");
 
             (controller as IEntity).Update();
         }

@@ -1,0 +1,206 @@
+@model ItemModel
+@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+@{
+    var name = Model.Name;
+    var value = Model.Value + "";
+    var editorId = "html_" + name;
+
+    var quillJs = Url.Content("~/Content/quill/quill.min.js");
+    var quillCss = Url.Content("~/Content/quill/quill.snow.css");
+    var uploadUrl = Url.Action("UploadFile");
+    var entityId = (ViewContext.RouteData.Values["id"]?.ToString() ?? Context.Request.Query["id"].FirstOrDefault()) ?? "";
+}
+<div id="@editorId" style="min-height:250px;max-height:600px;overflow-y:auto;overflow-x:hidden;background:#fff;resize:vertical"></div>
+<input type="hidden" id="@(name)_hidden" name="@name" value="@value" />
+<script>
+    (function () {
+        // 共用上传函数
+        function uploadFileXhr(file, onSuccess, onError) {
+            var fd = new FormData();
+            fd.append('file', file);
+            var eid = '@entityId';
+            if (eid) fd.append('id', eid);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '@uploadUrl');
+            xhr.onload = function() {
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    if (resp && resp.data && resp.data.filePath)
+                        onSuccess(resp.data.filePath, resp.data.contentType);
+                    else
+                        onError(resp && resp.error ? resp.error : '上传失败');
+                } catch(e) { onError('响应解析失败'); }
+            };
+            xhr.onerror = function() { onError('网络错误'); };
+            xhr.send(fd);
+        }
+
+        // 归一化富文本：
+        // 1) 仅剩空段落/换行/空白且无嵌入内容时返回空串，避免空富文本写入数据库并经由 SSO 同步扩散
+        // 2) 仅单个无属性段落（内部无软换行与嵌入内容，strong/em/a 等行内格式不影响）时去掉外层 <p></p>，一段话内容不必存成富文本
+        function normalizeHtml(html) {
+            if (!html) return '';
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            if (tmp.querySelector('img,iframe,video,audio,object,embed,svg')) return html;
+            if ((tmp.textContent || '').trim() === '') return '';
+            var first = tmp.firstElementChild;
+            if (first && first === tmp.lastElementChild && first.tagName === 'P' && first.attributes.length === 0 && !first.querySelector('br'))
+                return first.innerHTML;
+            return html;
+        }
+
+        // 加载 Quill（防重复加载，使用本地内嵌资源）
+        function loadQuill(callback) {
+            if (typeof Quill !== 'undefined') { callback(); return; }
+            if (document.querySelector('script[data-quill]')) {
+                var timer = setInterval(function () {
+                    if (typeof Quill !== 'undefined') { clearInterval(timer); callback(); }
+                }, 100);
+                return;
+            }
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = '@quillCss';
+            document.head.appendChild(css);
+
+            var js = document.createElement('script');
+            js.src = '@quillJs';
+            js.setAttribute('data-quill', '1');
+            js.onload = callback;
+            document.head.appendChild(js);
+        }
+
+        function initQuill() {
+            var container = document.getElementById('@editorId');
+            if (!container || container._quill) return;
+            var q = new Quill(container, {
+                theme: 'snow',
+                modules: {
+                    // 覆盖内置 uploader.handler，阻止默认 base64 转换，改为上传
+                    uploader: {
+                        mimetypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp'],
+                        handler: function(range, files) {
+                            var quill = this.quill;
+                            var file = files[0];
+                            if (!file) return;
+                            uploadFileXhr(file, function(url) {
+                                quill.insertEmbed(range.index, 'image', url, 'user');
+                                quill.setSelection(range.index + 1, 'user');
+                            }, function(err) { alert('图片上传失败: ' + err); });
+                        }
+                    },
+                    toolbar: {
+                        container: [
+                            [{ header: [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ color: [] }, { background: [] }],
+                            [{ list: 'ordered' }, { list: 'bullet' }],
+                            [{ indent: '-1' }, { indent: '+1' }],
+                            ['link', 'image', 'code-block'],
+                            ['clean']
+                        ],
+                        handlers: {
+                            image: function() {
+                                var input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = 'image/*';
+                                input.click();
+                                input.onchange = function() {
+                                    var file = input.files[0];
+                                    if (!file) return;
+                                    uploadFileXhr(file, function(url) {
+                                        var range = q.getSelection(true);
+                                        q.insertEmbed(range.index, 'image', url, 'user');
+                                        q.setSelection(range.index + 1, 'user');
+                                    }, function(err) { alert('图片上传失败: ' + err); });
+                                };
+                            }
+                        }
+                    }
+                }
+            });
+            var hidden = document.getElementById('@(name)_hidden');
+            if (hidden.value) q.clipboard.dangerouslyPasteHTML(hidden.value);
+            container._quill = q;
+
+            // HTML 源码模式：在编辑器下方插入隐藏 textarea
+            var sourceArea = document.createElement('textarea');
+            sourceArea.style.cssText = 'display:none;width:100%;min-height:250px;font-family:monospace;font-size:13px;box-sizing:border-box;padding:8px;border:1px solid #ccc;resize:vertical;';
+            container.parentElement.insertBefore(sourceArea, container.nextSibling);
+            var sourceMode = false;
+
+            var form = container.closest('form');
+            if (form) form.addEventListener('submit', function () {
+                // Quill 空内容固定为 <p><br></p>，与源码模式输入一起归一化，避免空富文本写入数据库
+                hidden.value = normalizeHtml(sourceMode ? sourceArea.value : q.root.innerHTML);
+            });
+
+            // 工具栏自定义按钮：通过 getModule('toolbar').container 获取工具栏，包裹在 ql-formats 内跟随 flex 布局
+            var toolbarContainer = q.getModule('toolbar').container;
+            if (toolbarContainer) {
+                var group = document.createElement('span');
+                group.className = 'ql-formats';
+
+                // 附件上传按钮（倒数第二）
+                var fileBtn = document.createElement('button');
+                fileBtn.type = 'button';
+                fileBtn.title = '上传附件';
+                fileBtn.innerHTML = '&#128206;';
+                fileBtn.className = 'ql-file';
+                fileBtn.style.cssText = 'font-size:15px;line-height:1;padding:2px 6px;';
+                group.appendChild(fileBtn);
+                fileBtn.addEventListener('click', function() {
+                    var input = document.createElement('input');
+                    input.type = 'file';
+                    input.click();
+                    input.onchange = function() {
+                        var file = input.files[0];
+                        if (!file) return;
+                        uploadFileXhr(file, function(url, contentType) {
+                            var range = q.getSelection(true);
+                            if (contentType && contentType.startsWith('image/')) {
+                                q.insertEmbed(range.index, 'image', url, 'user');
+                                q.setSelection(range.index + 1, 'user');
+                            } else {
+                                q.insertText(range.index, file.name, 'link', url, 'user');
+                                q.setSelection(range.index + file.name.length, 'user');
+                            }
+                        }, function(err) { alert('附件上传失败: ' + err); });
+                    };
+                });
+
+                // HTML 源码切换按钮（最后）
+                var sourceBtn = document.createElement('button');
+                sourceBtn.type = 'button';
+                sourceBtn.title = '切换 HTML 源码';
+                sourceBtn.textContent = '</>';
+                sourceBtn.className = 'ql-source';
+                sourceBtn.style.cssText = 'font-size:12px;font-weight:bold;line-height:1;padding:2px 5px;';
+                group.appendChild(sourceBtn);
+                sourceBtn.addEventListener('click', function() {
+                    if (!sourceMode) {
+                        sourceArea.value = q.root.innerHTML;
+                        container.style.display = 'none';
+                        sourceArea.style.display = 'block';
+                        sourceBtn.style.color = '#1890ff';
+                        sourceMode = true;
+                    } else {
+                        q.clipboard.dangerouslyPasteHTML(sourceArea.value);
+                        sourceArea.style.display = 'none';
+                        container.style.display = '';
+                        sourceBtn.style.color = '';
+                        sourceMode = false;
+                    }
+                });
+
+                toolbarContainer.appendChild(group);
+            }
+        }
+
+        loadQuill(initQuill);
+    })();
+</script>

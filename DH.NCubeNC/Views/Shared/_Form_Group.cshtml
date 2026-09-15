@@ -1,4 +1,4 @@
-﻿@model EntityField
+@model EntityField
 @using NewLife;
 @using NewLife.Cube.ViewModels
 @using XCode;
@@ -17,9 +17,21 @@
         @await Html.PartialAsync("_Form_Item", Model)
     </div>
 }
+else if (field.ItemType.EqualIgnoreCase("html"))
+{
+    <div class="form-group col-xs-12 col-sm-12 col-lg-12">
+        @await Html.PartialAsync("_Form_Html", Model)
+    </div>
+}
+else if (field.ItemType.EqualIgnoreCase("markdown"))
+{
+    <div class="form-group col-xs-12 col-sm-12 col-lg-12">
+        @await Html.PartialAsync("_Form_Markdown", Model)
+    </div>
+}
 else if (field.IsBigText())
 {
-    <div class="form-group col-xs-12 col-sm-12">
+    <div class="form-group col-xs-12 col-sm-12 col-lg-12">
         @await Html.PartialAsync("_Form_BigText", Model)
     </div>
 }

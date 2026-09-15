@@ -21,45 +21,49 @@ public class ListField : DataField
 {
     #region 属性
     /// <summary>单元格文字</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String Text { get; set; }
 
     /// <summary>单元格标题。数据单元格上的提示文字</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String Title { get; set; }
 
     /// <summary>单元格链接。数据单元格的链接</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String Url { get; set; }
 
     ///// <summary>单元格图标。数据单元格前端显示时的图标或图片</summary>
     //public String Icon { get; set; }
 
-    /// <summary>
-    /// 链接目标。参考：TargetEnum 
-    /// _blank/_self/_parent/_top
-    /// 默认：null,会根据皮肤自动判断打开方式，layui:在框架页多标签打开，ace:在当前页面进行跳转
-    /// </summary>
+    /// <summary>链接目标。参考：TargetEnum _blank/_self/_parent/_top，默认 null 根据皮肤自动判断</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String Target { get; set; }
 
     /// <summary>头部文字</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String Header { get; set; }
 
     /// <summary>头部标题。数据移上去后显示的文字</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String HeaderTitle { get; set; }
 
     /// <summary>文本对齐方式</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public TextAligns TextAlign { get; set; }
 
     /// <summary>单元格样式</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String Class { get; set; }
 
     /// <summary>最大宽度。用于指定超长隐藏文本的长度</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public Int32 MaxWidth { get; set; }
 
     ///// <summary>头部链接。一般是排序</summary>
     //public String HeaderUrl { get; set; }
 
-    /// <summary>
-    /// 数据动作。参考：DataAction
-    /// 默认：null 作为普通url操作；action 走ajax请求</summary>
+    /// <summary>数据动作。null 作为普通 url 操作；action 走 ajax 请求</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public String DataAction { get; set; }
 
     /// <summary>获取数据委托。可用于自定义列表页单元格数值的显示</summary>
@@ -311,7 +315,7 @@ public class ListField : DataField
         return Replace(link, data, EnumModes.String);
     }
 
-    /// <summary>针对指定实体对象计算url，替换其中变量</summary>
+    /// <summary>针对指定实体对象计算url，替换其中变量。当 Url 为空且存在 MapProvider 时，自动从 EntityPageRegistry 构造含 Area 前缀的跳转路径</summary>
     /// <param name="data"></param>
     /// <param name="page"></param>
     /// <returns></returns>
@@ -320,10 +324,26 @@ public class ListField : DataField
         var svc = GetService<IUrlExtend>();
         if (svc != null) return svc.Resolve(this, data);
 
-        if (Url.IsNullOrEmpty()) return null;
+        // 当 Url 为空但存在 MapProvider 时，尝试从注册表自动构造跳转 URL
+        var urlTemplate = Url;
+        if (urlTemplate.IsNullOrEmpty() && MapProvider != null && !MapField.IsNullOrEmpty())
+        {
+            var info = EntityPageRegistry.Get(MapProvider.EntityType);
+            if (info != null)
+            {
+                urlTemplate = info.GetUrlTemplate(MapField);
+            }
+            else
+            {
+                // 注册表中无记录时回退到不含 Area 前缀的路径（兼容旧行为）
+                urlTemplate = $"/{MapProvider.EntityType.Name}?{MapProvider.Key}={{{MapField}}}";
+            }
+        }
+
+        if (urlTemplate.IsNullOrEmpty()) return null;
 
         //return _reg.Replace(Url, m => data[m.Groups[1].Value + ""] + "");
-        var rs = Replace(Url, data, EnumModes.Int);
+        var rs = Replace(urlTemplate, data, EnumModes.Int);
         if (page != null && !rs.IsNullOrEmpty()) rs = Replace(rs, page, EnumModes.Int);
 
         return rs;

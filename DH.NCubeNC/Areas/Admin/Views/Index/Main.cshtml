@@ -34,11 +34,12 @@
     var gc = $"IsServerGC={GCSettings.IsServerGC},LatencyMode={GCSettings.LatencyMode}";
 }
 <div class="table-responsive">
-    <table class="table table-bordered table-hover table-striped table-condensed">
+    <table class="table table-bordered table-hover table-striped table-condensed table-data-list">
         <thead>
             <tr>
                 <th colspan="4">
                     服务器信息
+                    <button type="button" class="btn btn-info btn-sm" style="margin-left:16px;" onclick="CubeAI.diagnose()">AI 诊断</button>
                 </th>
             </tr>
         </thead>
@@ -195,7 +196,7 @@
             </tr>
         </tbody>
     </table>
-    <table class="table table-bordered table-hover table-striped table-condensed">
+    <table class="table table-bordered table-hover table-striped table-condensed table-data-list">
         <thead>
             <tr>
                 <th>名称</th>
@@ -221,3 +222,6 @@
         </tbody>
     </table>
 </div>
+
+@* AI 诊断弹窗（流式输出） *@
+@await Html.PartialAsync("_AiDiagnoseModal")

@@ -1,0 +1,72 @@
+/**
+ * CUBE 后台管理系统 — 全局样式
+ * 
+ * 只保留通用样式，品牌色在 themes/ 目录下的主题文件中定义
+ */
+
+/* ============================================================
+   §1 — 全局基础样式
+   ============================================================ */
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    'Inter',
+    'DM Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    'Noto Sans SC',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
+}
+
+/* ── 滚动条样式 ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--el-border-color);
+}
+
+/* ── 焦点样式 ── */
+:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+/* ── 选中文本样式 ── */
+::selection {
+  background: var(--el-color-primary-light-8);
+  color: var(--el-text-color-primary);
+}
+
+/* ── 工具类 ── */
+.hidden {
+  display: none !important;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

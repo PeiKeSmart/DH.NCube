@@ -6,31 +6,42 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NewLife.Cube.Extensions;
+using NewLife.Cube.AI;
+using NewLife.Cube.Entity;
 using NewLife.Cube.ViewModels;
+using NewLife.Cube.Widgets;
+using NewLife.Cube.Widgets.System;
 using NewLife.Log;
 using NewLife.Reflection;
+using NewLife.Serialization;
 using NewLife.Web;
+using XCode;
 using XCode.Membership;
+using XLog = XCode.Membership.Log;
+using static XCode.Membership.Log;
 
 namespace NewLife.Cube.Areas.Admin.Controllers;
 
 /// <summary>首页</summary>
 [DisplayName("首页")]
 [AdminArea]
-[Menu(0, false, Icon = "fa-home")]
-public class IndexController : ControllerBaseX
+[Menu(0, false, Icon = "HomeFilled", Mode = MenuModes.Admin | MenuModes.Tenant)]
+public class IndexController : ControllerBaseX, IPageDataContext
 {
     private readonly IManageProvider _provider;
     private readonly IWebHostEnvironment _env;
+    private readonly IAIService _ai;
+    private readonly WidgetManager _widgetManager;
 
     static IndexController() => MachineInfo.RegisterAsync();
 
     /// <summary>实例化</summary>
-    public IndexController(IManageProvider manageProvider, IWebHostEnvironment env)
+    public IndexController(IManageProvider manageProvider, IWebHostEnvironment env, IAIService ai, WidgetManager widgetManager)
     {
         _provider = manageProvider;
         _env = env;
+        _ai = ai;
+        _widgetManager = widgetManager;
         PageSetting.EnableNavbar = false;
     }
 
@@ -38,11 +49,12 @@ public class IndexController : ControllerBaseX
     /// <returns></returns>
     //[EntityAuthorize(PermissionFlags.Detail)]
     [AllowAnonymous]
-    [HttpGet("/[area]/[controller]")]
+    [HttpGet("/api/[area]/[controller]")]
     public ActionResult Index()
     {
         var user = ManageProvider.Provider.TryLogin(HttpContext);
-        if (user == null) return RedirectToAction("Login", "User", new { r = Request.Path + "" });
+        // WebAPI版实体路由带 /api 前缀，回跳地址需还原为前端路由
+        if (user == null) return RedirectToAction("Login", "User", new { r = (Request.Path + "").TrimApiPrefix() });
 
         //ViewBag.User = ManageProvider.User;
         //ViewBag.Config = SysConfig.Current;
@@ -64,8 +76,19 @@ public class IndexController : ControllerBaseX
     [HttpGet]
     public ActionResult Main()
     {
-        var req = HttpContext.Request;
-        var conn = HttpContext.Connection;
+        var result = BuildServerInfo(_env.ContentRootPath, HttpContext);
+        //var res = result.ToOkApiResponse();
+        return Json(0, null, result);
+    }
+
+    /// <summary>收集服务器信息（供页面展示与 AI 页面上下文共用，避免重复逻辑）</summary>
+    /// <param name="contentRootPath">应用内容根目录（IWebHostEnvironment.ContentRootPath）</param>
+    /// <param name="context">当前 HTTP 上下文，用于获取请求与连接信息</param>
+    /// <returns>服务器信息对象</returns>
+    private static Object BuildServerInfo(String contentRootPath, Microsoft.AspNetCore.Http.HttpContext context)
+    {
+        var req = context.Request;
+        var conn = context.Connection;
         var gc = $"IsServerGC={GCSettings.IsServerGC},LatencyMode={GCSettings.LatencyMode}";
         var mi = MachineInfo.Current ?? new MachineInfo();
         var process = Process.GetCurrentProcess();
@@ -76,11 +99,11 @@ public class IndexController : ControllerBaseX
         var addrRemote = conn.RemoteIpAddress;
         if (addrLocal != null && addrLocal.IsIPv4MappedToIPv6) addrLocal = addrLocal.MapToIPv4();
         if (addrRemote != null && addrRemote.IsIPv4MappedToIPv6) addrRemote = addrRemote.MapToIPv4();
-        var userHost = HttpContext.GetUserHost();
+        var userHost = context.GetUserHost();
         var result = new
         {
-            system = req.GetRawUrl().AbsoluteUri,
-            path = _env.ContentRootPath,
+            system = req.GetRawUrl()?.AbsolutePath,
+            path = contentRootPath,
             host = req.Headers["Host"],
             local = addrLocal + ":" + conn.LocalPort,
             remote = addrRemote + ":" + conn.RemotePort,
@@ -99,9 +122,266 @@ public class IndexController : ControllerBaseX
             gc = gc,
             //startTime = ApplicationManager.Load().StartTime.ToLocalTime().ToFullString()
         };
-        //var res = result.ToOkApiResponse();
-        return Json(0, null, result);
+        return result;
     }
+
+    /// <summary>收集当前页面数据上下文（服务器信息），供 AI 分析当前页面。实现 <see cref="IPageDataContext"/>，get_page_context 优先调用服务端实现</summary>
+    /// <returns>服务器信息 JSON</returns>
+    [HttpGet]
+    public Task<String> GetPageDataContextAsync()
+        => Task.FromResult(BuildServerInfo(_env.ContentRootPath, HttpContext).ToJson());
+
+    /// <summary>监控数据。工作台性能曲线轮询接口，返回CPU/内存快照</summary>
+    /// <returns>CPU/内存快照 JSON</returns>
+    [DisplayName("监控数据")]
+    [EntityAuthorize(PermissionFlags.Detail)]
+    [HttpGet]
+    public ActionResult MonitorData()
+    {
+        var mi = MachineInfo.Current ?? new MachineInfo();
+
+        var cpu = Math.Round(mi.CpuRate * 100, 1);
+        var memPct = mi.Memory > 0 ? Math.Round((mi.Memory - mi.AvailableMemory) * 100.0 / mi.Memory, 1) : 0;
+
+        // 图表卡轮询契约：xs 为 X 轴新点数组，series 为各系列新数据数组，前端定时追加
+        return Json(0, null, new
+        {
+            xs = new[] { DateTime.Now.ToString("HH:mm:ss") },
+            series = new[]
+            {
+                new[] { cpu },
+                new[] { memPct },
+            },
+            memUsed = (mi.Memory - mi.AvailableMemory) / 1024 / 1024,
+            memTotal = mi.Memory / 1024 / 1024,
+        });
+    }
+
+    /// <summary>工作台数据聚合（React 皮肤首页使用）。返回 KPI、快捷入口、个人信息、系统信息。
+    /// 命名与 MVC 版工作台统一为 Dashboard（视图 Index/Dashboard）</summary>
+    /// <returns>工作台聚合数据 JSON</returns>
+    [DisplayName("工作台数据")]
+    [EntityAuthorize]
+    [HttpGet]
+    public ActionResult Dashboard()
+    {
+        var user = ManageProvider.User;
+
+        var mi = MachineInfo.Current ?? new MachineInfo();
+        var process = Process.GetCurrentProcess();
+
+        // KPI 指标（Widget 部件驱动，与 MVC 工作台同一套内置部件，增删内置部件自动同步）。
+        // 默认排序走 WidgetManager（外部业务组件在魔方内置前，KPI 簇内业务新卡自然上浮）；用户隐藏项分到 hiddenKpis，供前端恢复面板
+        var roleNames = user?.Roles?.Select(e => e.Name).ToList();
+        var isAdmin = user?.Roles.Any(e => e.IsSystem) == true;
+        var wm = _widgetManager;
+        var layout = user != null ? wm.GetLayout(user.ID) : new Dictionary<String, WidgetLayout>();
+        var kpis = new List<Object>();
+        var hiddenKpis = new List<Object>();
+        var kpiWidgets = wm.Scan().Values.Where(e => e.WidgetType == WidgetTypes.Kpi && wm.IsVisible(e, roleNames, isAdmin) && wm.IsEnabled(e));
+        foreach (var info in wm.SortByDefault(kpiWidgets))
+        {
+            var d = wm.GetData(info);
+            var value = d?.GetType().GetProperty("Value")?.GetValue(d) ?? "";
+            var trend = d?.GetType().GetProperty("Trend")?.GetValue(d) ?? "";
+            var url = d?.GetType().GetProperty("Url")?.GetValue(d) ?? "";
+            var item = new { name = info.Name, label = info.Title, value, trend, color = info.Color ?? "blue", url };
+            if (layout.TryGetValue(info.Name, out var itemLayout) && itemLayout.Hide) hiddenKpis.Add(item);
+            else kpis.Add(item);
+        }
+
+        // 快捷入口：最近访问优先，菜单补足
+        var links = new List<Object>();
+        var urls = new HashSet<String>(StringComparer.OrdinalIgnoreCase);
+        if (user != null)
+        {
+            foreach (var item in QuickLinkWidget.GetRecent(user.ID))
+            {
+                var menu = ManageProvider.Menu?.FindByUrl(item.Url);
+                if (menu == null || !menu.Visible || menu.Url.IsNullOrEmpty() || menu.Url.StartsWith("~/")) continue;
+                if (!urls.Add(menu.Url)) continue;
+
+                links.Add(new { Name = menu.DisplayName ?? menu.Name, Url = menu.Url, Icon = menu.Icon });
+            }
+        }
+        if (links.Count < 8)
+        {
+            foreach (var menu in XCode.Membership.Menu.FindAllWithCache().Where(e => e.Visible && !e.Url.IsNullOrEmpty() && !e.Url.StartsWith("~/") && !e.Url.EqualIgnoreCase("/Admin/Index/Dashboard")).OrderByDescending(e => e.UpdateTime).ThenByDescending(e => e.ID))
+            {
+                if (links.Count >= 8) break;
+                if (!urls.Add(menu.Url)) continue;
+
+                links.Add(new { Name = menu.DisplayName ?? menu.Name, Url = menu.Url, Icon = menu.Icon });
+            }
+        }
+
+        // 个人信息
+        var u = user as User;
+        Object profile = u == null ? null : new
+        {
+            u.Name,
+            u.DisplayName,
+            RoleNames = u.RoleNames,
+            u.Online,
+            u.Logins,
+            LastLogin = u.LastLogin.Year > 2000 ? u.LastLogin.ToFullString() : "",
+            u.LastLoginIP,
+            RegisterTime = u.RegisterTime.Year > 2000 ? u.RegisterTime.ToFullString() : "",
+        };
+
+        // 系统信息
+        var sysInfo = new Dictionary<String, Object>
+        {
+            ["操作系统"] = $"{mi.OSName} {mi.OSVersion}",
+            ["机器"] = $"{Environment.MachineName} / {Environment.UserName}",
+            ["处理器"] = $"{mi.Processor}，{Environment.ProcessorCount} 核心",
+            ["运行时"] = Assembly.GetExecutingAssembly().GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkDisplayName,
+            ["应用"] = $"{process.ProcessName}，程序集 {AssemblyX.GetAssemblies(null).Count()} 个",
+            ["启动时间"] = DateTime.Now.AddMilliseconds(-Environment.TickCount64).ToFullString(),
+        };
+
+        // 内容部件（KPI 以外）：可见/隐藏分开返回，排序对齐 MVC WidgetManager.GetWidgets（组配置 + 用户布局）。
+        // 图表卡（Monitor）数据体量大且前端独立轮询 MonitorData，此处只下发元数据；其余类型下发 GetData 数据
+        Object BuildWidgetItem(WidgetAttribute info) => new
+        {
+            name = info.Name,
+            title = info.Title,
+            icon = info.Icon,
+            cols = info.Cols,
+            category = info.Category,
+            widgetType = info.WidgetType.ToString(),
+            data = info.WidgetType == WidgetTypes.Chart ? null : wm.GetData(info),
+        };
+
+        var widgets = wm.GetWidgets(roleNames, isAdmin, user?.ID ?? 0)
+            .Where(e => e.WidgetType != WidgetTypes.Kpi)
+            .Select(BuildWidgetItem)
+            .ToList();
+        var hiddenWidgets = wm.GetHiddenWidgets(user?.ID ?? 0, roleNames, isAdmin)
+            .Where(e => e.WidgetType != WidgetTypes.Kpi)
+            .Select(BuildWidgetItem)
+            .ToList();
+
+        return Json(0, null, new
+        {
+            user = new
+            {
+                name = user?.Name,
+                displayName = (user as IUser)?.DisplayName,
+                roles = (user as IUser)?.Roles?.Select(e => e.Name).ToList(),
+            },
+            kpis,
+            hiddenKpis,
+            widgets,
+            hiddenWidgets,
+            quickLinks = links,
+            profile,
+            sysInfo,
+        });
+    }
+
+    #region 工作台布局
+    /// <summary>读取当前用户工作台卡片布局（排序+隐藏）。Parameter 表按用户持久化（分类 Widget.Layout，Name=config，LongValue=JSON），对齐 MVC WidgetManager</summary>
+    /// <returns>卡片名到布局项的字典（{name: {sort, hide}}）</returns>
+    [DisplayName("工作台布局")]
+    [EntityAuthorize]
+    [HttpGet]
+    public ActionResult GetWidgetLayout()
+    {
+        var userId = ManageProvider.User?.ID ?? 0;
+        var layout = _widgetManager.GetLayout(userId);
+        return Json(0, null, layout);
+    }
+
+    /// <summary>保存当前用户工作台卡片布局（排序+隐藏），合并为单行 Parameter 原子保存</summary>
+    /// <param name="layout">卡片名到布局项的字典（{name: {sort, hide}}）</param>
+    /// <returns></returns>
+    [DisplayName("保存工作台布局")]
+    [EntityAuthorize]
+    [HttpPost]
+    public ActionResult SaveWidgetLayout(IDictionary<String, WidgetLayout> layout)
+    {
+        var userId = ManageProvider.User?.ID ?? 0;
+        if (userId <= 0) return Json(401, null, "未登录");
+        if (layout == null || layout.Count == 0) return Json(1, null, "布局为空");
+
+        _widgetManager.SaveLayout(userId, layout);
+        return Json(0, null, "ok");
+    }
+
+    /// <summary>重置当前用户工作台卡片布局为默认（删除布局 Parameter 行）</summary>
+    /// <returns></returns>
+    [DisplayName("重置工作台布局")]
+    [EntityAuthorize]
+    [HttpPost]
+    public ActionResult ResetWidgetLayout()
+    {
+        var userId = ManageProvider.User?.ID ?? 0;
+        if (userId > 0) _widgetManager.ResetLayout(userId);
+
+        return Json(0, null, "ok");
+    }
+    #endregion
+
+    #region AI 诊断
+    /// <summary>AI 系统诊断。根据服务器运行指标生成健康诊断报告（SSE 流式输出）</summary>
+    /// <returns></returns>
+    [DisplayName("AI 系统诊断")]
+    [EntityAuthorize(PermissionFlags.Detail)]
+    [HttpGet]
+    public async Task<ActionResult> AiDiagnose()
+    {
+        var set = CubeSetting.Current;
+        if (!set.AISwitch) return Json(500, null, "AI 未启用，请在系统设置中开启");
+
+        var mi = MachineInfo.Current ?? new MachineInfo();
+        var process = Process.GetCurrentProcess();
+
+        // 查询过去 24h 错误数
+        var now = DateTime.Now;
+        var start = now.AddHours(-24);
+        var errorCount = XCode.Membership.Log.FindCount(
+            XCode.Membership.Log._.CreateTime >= start & XCode.Membership.Log._.CreateTime <= now,
+            null, null, 0, 0);
+
+        var sysInfo = new
+        {
+            cpu = $"{mi.CpuRate:P0}",
+            temperature = mi.Temperature,
+            memoryAvailable = $"{mi.AvailableMemory / 1024 / 1024:N0}M",
+            memoryTotal = $"{mi.Memory / 1024 / 1024:N0}M",
+            workingSet = $"{process.WorkingSet64 / 1024 / 1024:N0}M",
+            openTime = TimeSpan.FromMilliseconds(Environment.TickCount64).ToString(@"dd\.hh\:mm\:ss"),
+            errorCount24h = errorCount,
+            os = mi.OSName,
+            machineName = Environment.MachineName,
+        }.ToJson();
+
+        // SSE 方式输出
+        Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        // 发送元数据事件
+        var metaJson = new { type = "meta", model = set.AIModel, thinking = false }.ToJson();
+        await Response.WriteAsync($"data: {metaJson}\n\n", HttpContext.RequestAborted);
+        await Response.Body.FlushAsync(HttpContext.RequestAborted);
+
+        await foreach (var chunk in _ai.DiagnoseSystemStreamAsync(sysInfo, HttpContext.RequestAborted))
+        {
+            if (chunk.IsNullOrEmpty()) continue;
+            var eventJson = new { type = "text", content = chunk }.ToJson();
+            await Response.WriteAsync($"data: {eventJson}\n\n", HttpContext.RequestAborted);
+            await Response.Body.FlushAsync(HttpContext.RequestAborted);
+        }
+
+        // 发送结束事件
+        await Response.WriteAsync($"data: {{\"type\":\"done\"}}\n\n", HttpContext.RequestAborted);
+        await Response.Body.FlushAsync(HttpContext.RequestAborted);
+
+        return new EmptyResult();
+    }
+    #endregion
 
     /// <summary>服务器变量列表</summary>
     /// <returns></returns>
@@ -260,14 +540,8 @@ public class IndexController : ControllerBaseX
 
     private IList<MenuTree> GetMenu(String module)
     {
-        var user = _provider.Current as IUser;
-
         var fact = ManageProvider.Menu;
         var menus = fact.Root.Childs;
-        if (user?.Role != null)
-        {
-            menus = fact.GetMySubMenus(fact.Root.ID, user, true);
-        }
 
         // 根据模块过滤菜单
         if (module.EqualIgnoreCase("base"))
@@ -287,34 +561,22 @@ public class IndexController : ControllerBaseX
         {
             menus = menus.FirstOrDefault(e => e.Name.EqualIgnoreCase(module))?.Childs ?? [];
         }
-        else
-        {
-            // 去掉三级菜单，仅显示二级菜单。如果没有可用菜单，则取第一个有可访问子菜单的模块来显示
-            var ms = menus.Where(e => e.Childs.All(x => x.Childs.Count == 0)).ToList() as IList<IMenu>;
-            if (ms.Count == 0)
-            {
-                foreach (var item in menus)
-                {
-                    ms = fact.GetMySubMenus(item.ID, user, true);
-                    if (ms.Count > 0) break;
-                }
-            }
-
-            menus = ms;
-        }
+        // module 为空时不做过滤，直接返回全部根级菜单
 
         // 如果顶级只有一层，并且至少有三级目录，则提升一级
         if (menus.Count == 1 && menus[0].Childs.All(m => m.Childs.Count > 0)) { menus = menus[0].Childs; }
 
         var menuTree = MenuTree.GetMenuTree(pMenuTree =>
         {
-            var subMenus = fact.GetMySubMenus(pMenuTree.ID, user, true);
+            // 左侧菜单展示所有可见菜单，不按角色权限过滤
+            // 权限控制在 Controller/Action 层通过 EntityAuthorizeAttribute 实现
+            var parent = fact.FindByID(pMenuTree.ID);
+            var subMenus = parent?.Childs?.Where(m => m.Visible).ToList() as IList<IMenu> ?? [];
             return subMenus;
         }, list =>
         {
-
+            if (list == null || list.Count == 0) return null;
             var menuList = (from menu in list
-                                // where m.Visible
                             select new MenuTree
                             {
                                 ID = menu.ID,

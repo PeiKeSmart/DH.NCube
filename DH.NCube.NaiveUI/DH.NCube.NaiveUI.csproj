@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <AssemblyTitle>猿人易NaiveUI前端皮肤</AssemblyTitle>
+    <Description>猿人易NaiveUI前端皮肤包，基于Vue3+Naive UI，提供开箱即用的管理后台前端。支持动态菜单、字段元数据驱动的列表和表单、CRUD操作、OAuth登录、暗黑主题等功能。引用NuGet包即可获得完整前端，无需前端开发。</Description>
+    <Company>湖北登灏科技有限公司</Company>
+    <Copyright>©2020-2026 湖北登灏科技有限公司</Copyright>
+    <VersionPrefix>4.25</VersionPrefix>
+    <VersionSuffix>$([System.DateTime]::Now.ToString(`yyyy.MMdd`))</VersionSuffix>
+    <Version>$(VersionPrefix).$(VersionSuffix)</Version>
+    <FileVersion>$(Version)</FileVersion>
+    <AssemblyVersion>$(VersionPrefix).*</AssemblyVersion>
+    <Deterministic>false</Deterministic>
+    <OutputPath>..\Bin3</OutputPath>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DH.NCube.NaiveUI</PackageId>
+    <Authors>$(Company)</Authors>
+    <PackageProjectUrl>https://www.haocoding.com/</PackageProjectUrl>
+    <PackageIcon>DH.png</PackageIcon>
+    <RepositoryUrl>https://github.com/PeiKeSmart/DH.NCube</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>湖北登灏科技有限公司;DH组件;DH;$(AssemblyName);Vue;NaiveUI</PackageTags>
+    <PackageReleaseNotes>初始版本，提供Vue3+Naive UI内置前端，支持暗黑主题</PackageReleaseNotes>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- 引用 ASP.NET Core 共享框架 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NewLife" />
+    <Using Include="Microsoft.AspNetCore.Builder" />
+    <Using Include="Microsoft.AspNetCore.Hosting" />
+    <Using Include="Microsoft.AspNetCore.Http" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DH.NCube\DH.NCube.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- 将 wwwroot 静态文件嵌入程序集 -->
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Doc\DH.png" Link="DH.png" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

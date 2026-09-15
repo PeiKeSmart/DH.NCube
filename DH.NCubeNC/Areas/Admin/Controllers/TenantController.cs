@@ -9,18 +9,21 @@ namespace NewLife.Cube.Areas.Admin.Controllers;
 [Menu(75, true, Icon = "fa-user-circle", Mode = MenuModes.Admin | MenuModes.Tenant)]
 public class TenantController : EntityController<Tenant, TenantModel>
 {
+    private readonly ITenantContext _tenantContext;
+
     static TenantController()
     {
         LogOnChange = true;
 
         //ListFields.RemoveField("Secret", "Logo", "AuthUrl", "AccessUrl", "UserUrl", "Remark");
-        ListFields.RemoveField("ID", "Remark")
+        ListFields.RemoveField("Remark")
             .RemoveField("CreateUserId", "CreateTime", "CreateIP", "UpdateUserId", "UpdateTime", "UpdateIP");
 
         {
+            // 成员管理友好界面入口；标准列表可通过管理页内链接访问
             var df = ListFields.AddListField("Users", null, "ManagerName");
-            df.DisplayName = "用户";
-            df.Url = "/Admin/TenantUser?tenantId={Id}";
+            df.DisplayName = "成员";
+            df.Url = "/Admin/TenantUser/Manage?tenantId={Id}";
         }
 
         {
@@ -39,6 +42,13 @@ public class TenantController : EntityController<Tenant, TenantModel>
         }
     }
 
+    /// <summary>实例化</summary>
+    /// <param name="tenantContext">租户上下文</param>
+    public TenantController(ITenantContext tenantContext)
+    {
+        _tenantContext = tenantContext;
+    }
+
     /// <summary>搜索数据集</summary>
     /// <param name="p"></param>
     /// <returns></returns>
@@ -51,7 +61,7 @@ public class TenantController : EntityController<Tenant, TenantModel>
             if (entity != null) return new[] { entity };
         }
 
-        if (TenantContext.CurrentId > 0) PageSetting.EnableAdd = false;
+        if (_tenantContext.TenantId > 0) PageSetting.EnableAdd = false;
 
         var managerId = p["managerId"].ToInt(-1);
         //var roleIds = p["roleIds"].SplitAsInt();

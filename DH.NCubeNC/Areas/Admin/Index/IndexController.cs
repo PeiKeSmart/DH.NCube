@@ -1,14 +1,21 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using NewLife.Common;
+using NewLife.Cube.AI;
+using NewLife.Cube.Charts;
 using NewLife.Cube.Extensions;
+using NewLife.Cube.Membership;
 using NewLife.Cube.ViewModels;
+using NewLife.Cube.Widgets;
 using NewLife.Log;
 using NewLife.Reflection;
+using NewLife.Serialization;
 using XCode.Membership;
 
 namespace NewLife.Cube.Areas.Admin.Controllers;
@@ -17,10 +24,12 @@ namespace NewLife.Cube.Areas.Admin.Controllers;
 [DisplayName("首页")]
 [AdminArea]
 [Menu(0, false, Icon = "fa-home")]
-public class IndexController : ControllerBaseX
+public class IndexController : ControllerBaseX, IPageDataContext
 {
     private readonly IManageProvider _provider;
     private readonly IHostApplicationLifetime _applicationLifetime;
+    private readonly IAIService _ai;
+    private readonly WidgetManager _widgetManager;
 
     static IndexController() => MachineInfo.RegisterAsync();
 
@@ -29,10 +38,14 @@ public class IndexController : ControllerBaseX
     /// <summary>实例化</summary>
     /// <param name="manageProvider"></param>
     /// <param name="appLifetime"></param>
-    public IndexController(IManageProvider manageProvider, IHostApplicationLifetime appLifetime) : this()
+    /// <param name="ai"></param>
+    /// <param name="widgetManager">工作台组件管理器</param>
+    public IndexController(IManageProvider manageProvider, IHostApplicationLifetime appLifetime, IAIService ai, WidgetManager widgetManager) : this()
     {
         _provider = manageProvider;
         _applicationLifetime = appLifetime;
+        _ai = ai;
+        _widgetManager = widgetManager;
     }
 
     /// <summary>首页</summary>
@@ -53,7 +66,17 @@ public class IndexController : ControllerBaseX
         {
             // 判断租户关系
             var list = TenantUser.FindAllByUserId(user.ID);
-            if (list.Any(e => e.TenantId == tenantId) || tenantId == 0)
+
+            // 管理后台（AdminBackend）仅系统管理员可切换；普通用户仅能切换到其所属的有效租户
+            if (tenantId.GetTenantMode() == TenantMode.AdminBackend)
+            {
+                if (user is IUser iu && iu.Roles.Any(e => e.IsSystem))
+                {
+                    HttpContext.SaveTenant(0);
+                    return Redirect("/Admin");
+                }
+            }
+            else if (list.Any(e => e.TenantId == tenantId && e.Enable))
             {
                 var tenant = Tenant.FindById(tenantId);
 
@@ -82,12 +105,140 @@ public class IndexController : ControllerBaseX
         return isMobile ? View("MCubeIndex") : View("CubeIndex");
     }
 
+    /// <summary>工作台。聚合注册的工作台组件（Widget）渲染仪表盘首页，所有登录用户可访问，组件内按角色过滤</summary>
+    /// <returns></returns>
+    [DisplayName("工作台")]
+    // 工作台是登录后的首页，普通用户也需访问；组件内容由 WidgetManager 按角色过滤
+    [EntityAuthorize]
+    [Menu(10, true, Icon = "fa-home", LastUpdate = "20260827")]
+    public ActionResult Dashboard()
+    {
+        var user = _provider.Current as IUser;
+        var roleNames = user?.Roles?.Select(e => e.Name).ToList();
+        // 系统角色（IsSystem）可见系统监控组件，普通用户仅看个人工作台
+        var isAdmin = user?.Roles.Any(e => e.IsSystem) == true;
+
+        // 按用户排序与全局启停过滤，返回组件元数据
+        var widgets = _widgetManager.GetWidgets(roleNames, isAdmin, user?.ID ?? 0);
+
+        // 预取组件数据，并收集图表组件以触发布局加载 echarts.min.js
+        var charts = new List<ECharts>();
+        var list = new List<(WidgetAttribute Info, Object Data)>();
+        foreach (var info in widgets)
+        {
+            var data = _widgetManager.GetData(info);
+            list.Add((info, data));
+
+            if (data is ECharts chart)
+                charts.Add(chart);
+            else if (data is IEnumerable<ECharts> charts2)
+                charts.AddRange(charts2);
+        }
+
+        ViewBag.Widgets = list;
+        ViewBag.Charts = charts;
+        ViewBag.IsAdmin = isAdmin;
+        // 用户已隐藏的组件（恢复面板用）
+        ViewBag.HiddenWidgets = _widgetManager.GetHiddenWidgets(user?.ID ?? 0, roleNames, isAdmin);
+
+        return View();
+    }
+
+    /// <summary>保存工作台组件排序（按用户存 Parameter 表，分类 Widget.Layout 单行 JSON）</summary>
+    /// <param name="order">组件名数组，按显示顺序</param>
+    /// <returns></returns>
+    [DisplayName("保存排序")]
+    [EntityAuthorize]
+    [HttpPost]
+    public ActionResult SaveOrder(String[] order)
+    {
+        var user = _provider.Current as IUser;
+        if (user == null) return Json(401, "未登录");
+
+        if (order == null || order.Length == 0) return Json(0, null, "无排序数据");
+
+        // 按显示顺序生成排序值，合并进用户布局（保留隐藏状态）
+        var layout = _widgetManager.GetLayout(user.ID);
+        for (var i = 0; i < order.Length; i++)
+        {
+            var name = order[i];
+            if (name.IsNullOrEmpty()) continue;
+
+            layout[name] = new WidgetLayout { Sort = i, Hide = false };
+        }
+
+        _widgetManager.SaveLayout(user.ID, layout);
+
+        return Json(0, null, "排序已保存");
+    }
+
+    /// <summary>隐藏或恢复工作台组件（用户级布局，恢复后回到原排序位置）</summary>
+    /// <param name="name">组件名</param>
+    /// <param name="hide">是否隐藏</param>
+    /// <returns></returns>
+    [DisplayName("隐藏组件")]
+    [EntityAuthorize]
+    [HttpPost]
+    public ActionResult HideWidget(String name, Boolean hide)
+    {
+        var user = _provider.Current as IUser;
+        if (user == null) return Json(401, "未登录");
+        if (name.IsNullOrEmpty()) return Json(500, null, "缺少组件名");
+
+        _widgetManager.SetHidden(user.ID, name, hide);
+
+        return Json(0, null, hide ? "已隐藏" : "已恢复");
+    }
+
+    /// <summary>重置用户工作台布局为默认（删除布局配置，恢复出厂排序与显示）</summary>
+    /// <returns></returns>
+    [DisplayName("重置布局")]
+    [EntityAuthorize]
+    [HttpPost]
+    public ActionResult ResetLayout()
+    {
+        var user = _provider.Current as IUser;
+        if (user == null) return Json(401, "未登录");
+
+        _widgetManager.ResetLayout(user.ID);
+
+        return Json(0, null, "布局已重置");
+    }
+
+    /// <summary>监控数据。工作台性能曲线轮询接口，返回CPU/内存快照</summary>
+    /// <returns></returns>
+    [DisplayName("监控数据")]
+    [EntityAuthorize(PermissionFlags.Detail)]
+    [HttpGet]
+    public ActionResult MonitorData()
+    {
+        var mi = MachineInfo.Current ?? new MachineInfo();
+        var process = Process.GetCurrentProcess();
+
+        var cpu = Math.Round(mi.CpuRate * 100, 1);
+        // 内存使用率百分比，与曲线单 Y 轴（0~100%）同尺度
+        var memPct = mi.Memory > 0 ? Math.Round((mi.Memory - mi.AvailableMemory) * 100.0 / mi.Memory, 1) : 0;
+
+        // 图表卡轮询契约：xs 为 X 轴新点数组，series 为各系列新数据数组，固定视图定时追加
+        return Json(new
+        {
+            xs = new[] { DateTime.Now.ToString("HH:mm:ss") },
+            series = new[]
+            {
+                new[] { cpu },
+                new[] { memPct },
+            },
+            memUsed = (mi.Memory - mi.AvailableMemory) / 1024 / 1024,
+            memTotal = mi.Memory / 1024 / 1024,
+        });
+    }
+
     /// <summary>服务器信息</summary>
     /// <param name="id"></param>
     /// <returns></returns>
     [DisplayName("服务器信息")]
     [EntityAuthorize(PermissionFlags.Detail)]
-    [Menu(10, true, Icon = "fa-home")]
+    [Menu(0, false, Icon = "fa-home", LastUpdate = "20260827")]
     public ActionResult Main(String id)
     {
         ViewBag.Act = id;
@@ -109,6 +260,94 @@ public class IndexController : ControllerBaseX
         };
     }
 
+    /// <summary>收集当前页面数据上下文（服务器信息），供 AI 分析当前页面。实现 <see cref="IPageDataContext"/>，get_page_context 优先调用服务端实现</summary>
+    /// <returns>服务器信息 JSON</returns>
+    public Task<String> GetPageDataContextAsync()
+    {
+        var mi = MachineInfo.Current ?? new MachineInfo();
+        var process = Process.GetCurrentProcess();
+        var asm = Assembly.GetExecutingAssembly();
+        var att = asm.GetCustomAttribute<TargetFrameworkAttribute>();
+        var ver = att?.FrameworkDisplayName ?? att?.FrameworkName;
+        var data = new
+        {
+            page = "服务器信息",
+            application = process.ProcessName,
+            applicationTitle = Environment.CommandLine,
+            version = ver,
+            os = mi.OSName,
+            osVersion = mi.OSVersion,
+            machineId = mi.UUID,
+            machineProduct = mi.Product,
+            cpu = mi.Processor + Environment.ProcessorCount + "核心 使用率" + mi.CpuRate.ToString("p0") + mi.Temperature + " ℃",
+            openTime = TimeSpan.FromMilliseconds(Environment.TickCount64).ToString(@"dd\.hh\:mm\:ss"),
+            serverTime = DateTime.Now,
+            memory = "物理：" + (mi.AvailableMemory / 1024 / 1024).ToString("n0") + "M/" + (mi.Memory / 1024 / 1024).ToString("n0") + "M    工作/提交: " + (process.WorkingSet64 / 1024 / 1024).ToString("n0") + "M/@" + (process.PrivateMemorySize64 / 1024 / 1024).ToString("n0") + "M   GC: " + (GC.GetTotalMemory(false) / 1024 / 1024).ToString("n0") + "M",
+            processTime = process.TotalProcessorTime.TotalSeconds.ToString("N2") + "秒 启动于" + process.StartTime.ToLocalTime().ToFullString(),
+        }.ToJson();
+        return Task.FromResult(data);
+    }
+
+    #region AI 诊断
+    /// <summary>AI 系统诊断。根据服务器运行指标生成健康诊断报告（SSE 流式输出）</summary>
+    /// <returns></returns>
+    [DisplayName("AI 系统诊断")]
+    [EntityAuthorize(PermissionFlags.Detail)]
+    [HttpGet]
+    public async Task<ActionResult> AiDiagnose()
+    {
+        var set = CubeSetting.Current;
+        if (!set.AISwitch) return Json(500, null, "AI 未启用，请在系统设置中开启");
+
+        var mi = MachineInfo.Current ?? new MachineInfo();
+        var process = Process.GetCurrentProcess();
+
+        // 查询过去 24h 错误数
+        var now = DateTime.Now;
+        var start = now.AddHours(-24);
+        var errorCount = XCode.Membership.Log.FindCount(
+            XCode.Membership.Log._.CreateTime >= start & XCode.Membership.Log._.CreateTime <= now,
+            null, null, 0, 0);
+
+        var sysInfo = new
+        {
+            cpu = $"{mi.CpuRate:P0}",
+            temperature = mi.Temperature,
+            memoryAvailable = $"{mi.AvailableMemory / 1024 / 1024:N0}M",
+            memoryTotal = $"{mi.Memory / 1024 / 1024:N0}M",
+            workingSet = $"{process.WorkingSet64 / 1024 / 1024:N0}M",
+            openTime = TimeSpan.FromMilliseconds(Environment.TickCount64).ToString(@"dd\.hh\:mm\:ss"),
+            errorCount24h = errorCount,
+            os = mi.OSName,
+            machineName = Environment.MachineName,
+        }.ToJson();
+
+        // SSE 方式输出
+        Response.Headers["Content-Type"] = "text/event-stream; charset=utf-8";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        // 发送元数据事件
+        var metaJson = new { type = "meta", model = set.AIModel, thinking = false }.ToJson();
+        await Response.WriteAsync($"data: {metaJson}\n\n", HttpContext.RequestAborted);
+        await Response.Body.FlushAsync(HttpContext.RequestAborted);
+
+        await foreach (var chunk in _ai.DiagnoseSystemStreamAsync(sysInfo, HttpContext.RequestAborted))
+        {
+            if (chunk.IsNullOrEmpty()) continue;
+            var eventJson = new { type = "text", content = chunk }.ToJson();
+            await Response.WriteAsync($"data: {eventJson}\n\n", HttpContext.RequestAborted);
+            await Response.Body.FlushAsync(HttpContext.RequestAborted);
+        }
+
+        // 发送结束事件
+        await Response.WriteAsync($"data: {{\"type\":\"done\"}}\n\n", HttpContext.RequestAborted);
+        await Response.Body.FlushAsync(HttpContext.RequestAborted);
+
+        return new EmptyResult();
+    }
+    #endregion
+
     /// <summary>获取当前应用程序的所有程序集，不包括系统程序集，仅限本目录</summary>
     /// <returns></returns>
     public static List<AssemblyX> GetMyAssemblies()
@@ -128,7 +367,7 @@ public class IndexController : ControllerBaseX
 
                 if (file.StartsWith("file:///"))
                 {
-                    file = file.TrimStart("file:///");
+                    file = file.TrimPrefix("file:///");
                     if (Path.DirectorySeparatorChar == '\\')
                         file = file.Replace('/', '\\');
                     else
@@ -159,7 +398,7 @@ public class IndexController : ControllerBaseX
         {
             var p = Process.GetCurrentProcess();
             var fileName = p.MainModule.FileName;
-            var args = Environment.CommandLine.TrimStart(Path.ChangeExtension(fileName, ".dll")).Trim();
+            var args = Environment.CommandLine.TrimPrefix(Path.ChangeExtension(fileName, ".dll")).Trim();
             args += " -delay";
 
             WriteLog("Restart", true, $"fileName={fileName} args={args}");
@@ -289,6 +528,10 @@ public class IndexController : ControllerBaseX
                             }).ToList();
             return menuList.Count > 0 ? menuList : null;
         }, menus);
+
+        // 多租户开启时，按当前模式过滤菜单树（租户模式隐藏纯Admin菜单，管理后台隐藏纯Tenant菜单），与视图层 FilterByTenant 保持一致
+        if (CubeSetting.Current.EnableTenant)
+            menuTree = MenuHelper.FilterByTenant(menuTree, TenantContext.Current.GetTenantMode() == TenantMode.Tenant);
 
         return menuTree;
     }

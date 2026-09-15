@@ -1,0 +1,472 @@
+---
+name: cube-init
+description: |
+  初始化一个新的前端项目，使用 @newlifex/cube-vue 框架。
+  当用户说"初始化项目"、"创建新项目"、"搭建前端项目"、"使用 @newlifex/cube-vue 初始化"时使用此技能。
+  自动配置布局、状态管理(Pinia)、路由、API请求库、多语言支持、容器化部署等核心功能，开箱即用。
+---
+
+# @newlifex/cube-vue 项目初始化
+
+## 什么时候用
+
+当用户需要创建一个新的前端项目，或在现有项目中引入 @newlifex/cube-vue 框架时使用。
+
+## 架构说明
+
+@newlifex/cube-vue 包发布名为 `@newlifex/cube-vue`，代码中 import 使用 `@newlifex/cube-vue/...` 路径（通过 pnpm 别名机制）。
+
+支持两种项目结构：
+
+| 场景                  | 说明                                                            | 参考            |
+| --------------------- | --------------------------------------------------------------- | --------------- |
+| **Monorepo 工作空间** | 项目放在 @newlifex/cube-vue 所在仓库内，通过 workspace 协议引用 |                 |
+| **独立应用**          | @newlifex/cube-vue 作为 npm 包安装                              | 后续 npm 发布后 |
+
+**本技能以 monorepo 场景为主**，独立应用场景仅调整依赖声明方式（`npm install @newlifex/cube-vue` + 别名）。
+
+## 初始化步骤
+
+### 1. 检查环境
+
+- Node.js >= 24
+- pnpm >= 9
+- 根目录需配置 `pnpm-workspace.yaml`（monorepo 场景）
+
+### 2. 注册 workspace（monorepo 场景）
+
+在根目录 `pnpm-workspace.yaml` 中添加新项目：
+
+```yaml
+packages:
+  - '新项目目录'
+  - 'Cube/NewLife.Cube.Vue/web'  # 如已有则跳过
+```
+
+### 3. 创建项目入口文件
+
+在项目 `src/` 目录下创建 `main.ts`：
+
+```typescript
+// src/main.ts
+import { initApp } from '@newlifex/cube-vue/core/initApp';
+import '@newlifex/cube-vue/core/global.css';
+
+initApp();
+```
+
+### 4. 创建 index.html
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>应用名称</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+```
+
+### 5. 创建配置文件
+
+在项目根目录创建 `configs/` 目录：
+
+**configs/config.ts** - 通用配置：
+```typescript
+import type { EnvConfig } from '@newlifex/cube-vue/core/configure/types';
+
+export const config: EnvConfig = {
+  base: {
+    title: '应用名称',
+    footer: '版权所有 © 2026',
+  },
+  ui: {
+    theme: {
+      primaryColor: '#1890ff',
+    },
+  },
+  auth: {
+    oauthUrl: '/login',
+    getUserInfoAxiosConfig: {
+      url: '/Admin/User/Info',
+      method: 'GET',
+    },
+  },
+};
+```
+
+**configs/config.development.ts** - 开发环境配置：
+```typescript
+import type { EnvConfig } from '@newlifex/cube-vue/core/configure/types';
+
+export const config: EnvConfig = {
+  request: {
+    baseUrl: import.meta.env.VITE_APP_BASE_API || 'http://localhost:5000',
+    timeout: 30000,
+  },
+};
+```
+
+**configs/config.test.ts** - 测试环境配置：
+```typescript
+import type { EnvConfig } from '@newlifex/cube-vue/core/configure/types';
+
+export const config: EnvConfig = {
+  request: {
+    baseUrl: import.meta.env.VITE_APP_BASE_API || '/api',
+    timeout: 30000,
+  },
+};
+```
+
+**configs/config.production.ts** - 生产环境配置（支持容器部署替换）：
+```typescript
+import type { EnvConfig } from '@newlifex/cube-vue/core/configure/types';
+
+export const config: EnvConfig = {
+  request: {
+    baseUrl: '${BUILD_REQUEST_BASE_URL}',
+    timeout: 30000,
+  },
+};
+```
+
+**configs/microAppConfig.json** - 微应用配置（空数组即可）：
+```json
+[]
+```
+
+### 6. 创建环境变量文件
+
+**`.env`** - 通用环境变量：
+```bash
+VITE_APP_TITLE=应用名称
+```
+
+**`.env.development`** - 开发环境变量：
+```bash
+VITE_APP_ENV=development
+VITE_APP_TITLE=应用名称 - 开发环境
+VITE_APP_BASE_API=http://localhost:5000
+```
+
+**`.env.test`** - 测试环境变量（需 `vite --mode test`）：
+```bash
+VITE_APP_ENV=test
+VITE_APP_TITLE=应用名称 - 测试环境
+VITE_APP_BASE_API=http://test-api.example.com
+```
+
+**`.env.production`** - 生产环境变量：
+```bash
+VITE_APP_ENV=production
+VITE_APP_TITLE=应用名称
+# 生产环境 API URL 由容器部署时通过 BUILD_REQUEST_BASE_URL 注入
+VITE_APP_BASE_API=/api
+```
+
+### 7. 配置 Vite
+
+**vite.config.ts**（monorepo 场景——不需要 alias）：
+
+```typescript
+import { fileURLToPath, URL } from 'node:url';
+import { defineConfig, loadEnv } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import vueJsx from '@vitejs/plugin-vue-jsx';
+import cubeFront from '@newlifex/cube-vue/core/plugin';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+
+  return {
+    plugins: [
+      vue(),
+      vueJsx(),
+      cubeFront(),
+    ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        // ⚠️ 必须加 '@newlifex/cube-vue' 别名指向 Cube web 源码目录：
+        // 包内代码用包名自引用（@newlifex/cube-vue/core/...）时，pnpm workspace 链接
+        // 只存在于应用侧 node_modules，包内部解析不到，需别名兜底。
+        // 例：'@newlifex/cube-vue': fileURLToPath(new URL('../Cube/NewLife.Cube/NewLife.Cube.Vue/web', import.meta.url))
+      },
+    },
+    server: {
+      port: 5188,
+      host: '0.0.0.0',
+      proxy: {
+        '/api': {
+          target: env.VITE_APP_BASE_API || 'http://localhost:5000',
+          changeOrigin: true,
+        },
+      },
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: true,
+      target: 'es2022',
+    },
+  };
+});
+```
+
+> **为什么不需要 `@newlifex/cube-vue` 别名？** 因为 pnpm workspace 协议（`workspace:*`）+ 别名（`"@newlifex/cube-vue": "workspace:@newlifex/cube-vue@*"`）会自动创建 `node_modules/@newlifex/cube-vue` 的 symlink，Node.js 模块解析就能直接找到。
+
+### 8. 配置 TypeScript
+
+> ⚠️ **重要**：必须添加 `@newlifex/cube-vue/core/client` 类型声明，否则 `initApp()` 等 API 会报类型错误。
+
+**tsconfig.json**：
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["@newlifex/cube-vue/core/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+```
+
+> **说明**：`"types": ["@newlifex/cube-vue/core/client"]` 会自动加载框架的类型声明文件，确保 `initApp()`、`useUserStore()` 等 API 的类型提示正常工作。
+
+**tsconfig.node.json**：
+```json
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true
+  },
+  "include": ["vite.config.ts"]
+}
+```
+
+### 9. 配置 package.json
+
+**Monorepo 场景 — 依赖声明**：
+
+使用 **一条** workspace 依赖：
+
+```json
+{
+  "dependencies": {
+    "@newlifex/cube-vue": "workspace:*",
+    "dayjs": "^1.11.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "@vitejs/plugin-vue-jsx": "^4.1.0",
+    "cross-env": "^7.0.3",
+    "typescript": "~5.8.0",
+    "vite": "^6.2.0",
+    "vue-tsc": "^2.2.0"
+  }
+}
+```
+
+**条目解释**：
+| 依赖                                                     | 作用                                                                 |
+| -------------------------------------------------------- | -------------------------------------------------------------------- |
+| `"@newlifex/cube-vue": "workspace:*"`                    | 正式包名，monorepo 内通过 workspace 协议引用本地库                   |
+| vue/pinia/element-plus/vue-router                        | 不必须声明（pnpm auto-install-peers 自动装），但**建议显式锁定版本** |
+
+> **为什么不需要`@newlifex/cube-vue: "link:../../@newlifex/cube-vue"`**？因为 monorepo workspace 模式下，`workspace:*` 等价且语义更清晰，`link:` 路径已被淘汰。
+
+### 10. package.json 完整示例
+
+```json
+{
+  "name": "your-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development vite",
+    "dev:test": "cross-env NODE_ENV=test vite --mode test",
+    "build": "vue-tsc -b && vite build",
+    "build:test": "vue-tsc -b && vite build --mode test",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@newlifex/cube-vue": "workspace:*",
+    "element-plus": "^2.9.0",
+    "pinia": "^3.0.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.5.0",
+    "dayjs": "^1.11.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "@vitejs/plugin-vue-jsx": "^4.1.0",
+    "cross-env": "^7.0.3",
+    "typescript": "~5.8.0",
+    "vite": "^6.2.0",
+    "vue-tsc": "^2.2.0"
+  }
+}
+```
+
+### 11. 创建 Docker 配置
+
+在项目根目录创建 `docker/` 目录：
+
+**docker/Dockerfile**：
+```dockerfile
+# 构建阶段
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# 安装 pnpm
+RUN npm install -g pnpm
+
+# 安装依赖（monorepo 场景需复制根目录 lock）
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+# 复制源代码
+COPY . .
+
+# 构建
+RUN pnpm run build
+
+# 生产阶段
+FROM nginx:alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY docker/enterpoint.sh /docker-entrypoint.d/enterpoint.sh
+RUN chmod +x /docker-entrypoint.d/enterpoint.sh
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**docker/enterpoint.sh**：
+```bash
+#!/bin/bash
+set +e
+set -x
+
+echo "🚀 Frontend Container Starting..."
+
+# 替换 BUILD_ 开头的占位符
+sed -i "s|BUILD_REQUEST_BASE_URL|${BUILD_REQUEST_BASE_URL:-/}|g" /usr/share/nginx/html/index.html
+
+echo "✅ 配置完成"
+echo "🎉 启动 Nginx..."
+
+exec "$@"
+```
+
+## 配置优先级（从低到高）
+
+```
+defaultConfig → configs/config.ts → configs/config.{env}.ts → window._CUBE_CONFIG_ → BUILD_ 占位符
+```
+
+## BUILD_ 占位符机制
+
+用于生产环境容器部署时动态注入配置：
+
+1. 在 `configs/config.production.ts` 中使用 `baseUrl: '${BUILD_REQUEST_BASE_URL}'`
+2. Vite 构建时会自动将 `BUILD_XXX` 占位符注入到 `dist/index.html`
+3. 容器启动时，`docker/enterpoint.sh` 通过 sed 替换占位符
+
+生成的 html 内联脚本格式：
+```html
+<script>
+let cubeConfig = window._CUBE_CONFIG_ || (window._CUBE_CONFIG_={});
+let request = cubeConfig["request"] || (cubeConfig["request"]={});
+request["baseUrl"] = "BUILD_REQUEST_BASE_URL";
+</script>
+```
+
+## 框架提供的能力
+
+| 功能                | 说明                                     | 如何使用                                                      |
+| ------------------- | ---------------------------------------- | ------------------------------------------------------------- |
+| **布局系统**        | RootLayout 统一接管菜单/登录/标签页，布局组件仅提供结构外壳 | 通过 `registerLayout(option, setAsCurrent)` 登记（见 cube-layout 技能），**禁止**旧版 `provide(LayoutKey)` |
+| **状态管理**        | UserStore 用户状态，MenuStore 菜单状态   | `useUserStore()`, `useMenuStore()`                            |
+| **路由系统**        | 动态路由，由后端菜单自动生成             | 无需手写 vue-router 配置，页面文件按目录约定放置即可          |
+| **API请求**         | 带 Token、401处理、错误提示的 Axios 封装 | `import request from '@newlifex/cube-vue/core/utils/request'` |
+| **国际化**          | Vue I18n，支持动态切换                   | `intl.get('key').d('默认值')`                                 |
+| **页面覆盖**        | Section 机制，可覆盖框架组件             | 在**视图目录**下创建 PascalCase（首字母大写）Vue 文件，见下方「页面视图目录约定」 |
+| **BUILD_ 配置注入** | 生产构建时自动注入到 html                | 在 config.production.ts 使用 `${BUILD_XXX}`                   |
+
+## 验证初始化成功
+
+1. **开发环境验证**：
+   - `pnpm dev` 启动
+   - 访问 `http://localhost:3000`
+   - 检查登录页面正常渲染
+
+2. **生产构建验证**：
+   - `pnpm build` 成功
+   - 检查 `dist/index.html` 是否包含 BUILD_ 占位符脚本
+
+## 红线 / 禁止自行发挥
+
+> 以下为历史踩坑固化的强制约束，**落实时严格照办，禁止凭记忆或"想当然"自行发挥**：
+
+1. **框架源码路径有层级，定位时别少写一层**：本仓库中框架源码位于 `Cube/NewLife.Cube/NewLife.Cube.Vue/web`（注意是两层：`NewLife.Cube` 目录内还有一层 `NewLife.Cube.Vue`）。不同仓库层级可能不同，关键是**先确认框架源码真实目录再引用**——任何指向框架源码的路径、别名、`@newlifex/cube-vue` 兜底 alias 都要与实际目录对齐，少写一层会导致文件找不到（MISSING）。
+2. **`package.json` 不要重复声明 `@newlifex/cube-vue`**：monorepo 场景只用 `workspace:*` 一条依赖（见步骤 9/10），禁止再写第二处 `link:` 或重复键——重复键会让 pnpm 解析失败或产生不可预期的幽灵依赖。
+3. **dev 脚本统一用 `cross-env`**：`"dev": "cross-env NODE_ENV=development vite"`，不要裸写 `vite` 或直接 `NODE_ENV=development vite`（跨平台兼容）。
+4. **视图目录必须含 `apps/` 层级（独立宿主）**：若 `vite.config.ts` 在项目根目录（非 `apps/<name>/`），页面**必须**放进 `apps/<app-name>/src/views/...`，否则 Vite 插件按 `apps/*/src/views` 扫描，扫不到 `src/views/` 下的页面。详见「页面视图目录约定」。
+5. **不要创建被框架接管的孤儿文件**：`initApp()` 内部已挂载框架 `core/App.vue`，**禁止**在项目里再写一份 `src/App.vue`（那是孤儿文件，不会生效且造成困惑）。`src/main.ts` 只需 `initApp()` + `registerLayout()`，不要手写 `createApp().mount()` 或 `new Router()`。
+6. **Docker 章节按需执行**：仅在需要容器部署时才创建 `docker/`，不部署则跳过，不要无脑生成（用户明确暂不启用 docker）。
+
+## 多语言配置（可选）
+
+默认中文，如需多语言在 `src/i18n/` 下配置：
+- `src/i18n/index.ts` - I18n 实例
+- `src/i18n/locales/` - 语言文件目录
+
+## 页面视图目录约定（重要）
+
+框架通过 Vite 插件在**构建期**自动扫描视图目录、生成路由与 Section 覆盖。**视图目录位置取决于项目结构**：
+
+| 项目结构 | vite.config.ts 位置 | 页面应放置目录 | 说明 |
+| --- | --- | --- | --- |
+| 子项目模式（monorepo 子应用） | `<root>/apps/<name>/vite.config.ts` | `apps/<name>/src/views/<area>/<controller>/index.vue` | 插件按 `apps/<name>/src/views` 精确扫描 |
+| 单体模式（根目录即应用） | `<root>/vite.config.ts` | **`<root>/apps/<name>/src/views/...`**（必须含 `apps/` 层级） | 插件遍历 `root/apps/*/src/views`，**不会**扫描 `src/views/` |
+| 框架内置应用 | 框架源码内 | `@newlifex/cube-vue/core/apps/*/src/views` | 仅框架自身使用 |
+
+> 独立宿主常见坑：若项目是独立 Vue 应用（vite.config 在根目录、没有 `apps/` 子目录），不要把页面放进 `src/views/` —— 框架扫描不到。必须在根目录新建 `apps/<your-app-name>/src/views/...`，让插件按单体模式扫描到。一个根目录下可以有多个 `apps/*`，每个各自一份 `src/views`。
+
+页面文件命名（用于 Section 覆盖）：
+- 路由页：`views/<area>/<controller>/index.vue`（小写目录 + `index.vue`）
+- Section 覆盖：`views/<area>/<controller>/<PascalCase>.vue`（首字母大写的 Vue 文件名会被识别为 Section 覆盖组件）
+
+详见 `cube-add-page` 技能。

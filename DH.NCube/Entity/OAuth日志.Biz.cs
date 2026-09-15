@@ -1,4 +1,4 @@
-﻿using System.Runtime.Serialization;
+using System.Runtime.Serialization;
 using System.Web.Script.Serialization;
 using System.Xml.Serialization;
 using NewLife.Data;
@@ -19,9 +19,9 @@ public partial class OAuthLog : Entity<OAuthLog>
         //var df = Meta.Factory.AdditionalFields;
         //df.Add(nameof(ConnectId));
 
-        // 过滤器 UserModule、TimeModule、IPModule
-        Meta.Modules.Add<TimeModule>();
-        Meta.Modules.Add<IPModule>();
+        // 过滤器 UserInterceptor、TimeInterceptor、IPInterceptor
+        Meta.Interceptors.Add<TimeInterceptor>();
+        Meta.Interceptors.Add<IPInterceptor>();
     }
 
     /// <summary>验证并修补数据，通过抛出异常的方式提示验证失败。</summary>
@@ -117,28 +117,22 @@ public partial class OAuthLog : Entity<OAuthLog>
 
     #region 业务操作
     /// <summary>删除指定日期之前的数据</summary>
-    /// <param name="date"></param>
+    /// <param name="date">保留时间点</param>
+    /// <param name="maximumRows">每次清理最多删除的行数，0 表示不限制</param>
     /// <returns></returns>
-    public static Int32 DeleteBefore(DateTime date)
+    public static Int32 DeleteBefore(DateTime date, Int32 maximumRows = 0)
     {
-        // SQLite下日志表较大时，删除可能报错，可以查询出来逐个删除
-        var where = _.Id < Meta.Factory.Snow.GetId(date) & _.UserId == 0;
-        try
-        {
-            return Delete(where);
-        }
-        catch (XSqlException)
-        {
-            var rs = 0;
-            for (var i = 0; i < 100; i++)
-            {
-                var list = FindAll(where, null, null, 0, 10000);
-                if (list.Count == 0) break;
+        var where = _.Id < Meta.Factory.Snow.GetId(date);
+        if (maximumRows <= 0) return Delete(where);
 
-                rs += list.Delete();
-            }
-            return rs;
+        var rs = 0;
+        while (true)
+        {
+            var count = Delete(where, maximumRows);
+            if (count <= 0) break;
+            rs += count;
         }
+        return rs;
     }
     #endregion
 }

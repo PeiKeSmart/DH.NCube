@@ -7,18 +7,21 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
+using NewLife.Cube.Areas.Cube.Controllers;
 using NewLife.Cube.Entity;
 using NewLife.Cube.Services;
+using NewLife.Cube.Web;
 using NewLife.Data;
 using NewLife.Log;
 using NewLife.Reflection;
-using NewLife.Remoting.Services;
 using NewLife.Web;
 using XCode;
 using XCode.Membership;
 using static XCode.Membership.User;
+using NewLife.Cube.ViewModels;
 using AreaX = XCode.Membership.Area;
 using HttpContext = Microsoft.AspNetCore.Http.HttpContext;
+using IManageUser = NewLife.Model.IManageUser;
 
 namespace NewLife.Cube.Controllers;
 
@@ -93,7 +96,9 @@ public class CubeController(PageService pageService, TokenService tokenService, 
 
     private Boolean ValidateToken(String actionName)
     {
-        // 不验证附件权限，且访问附件接口时，直接通过
+        // Image/File 在方法内部做细粒度权限控制，直接放行
+        if (actionName.EqualIgnoreCase(nameof(Image), nameof(File))) return true;
+        // 其他附件接口（Avatar）使用全局附件验证开关
         if (!CubeSetting.Current.ValidateAttachment && _attachmentApis.Contains(actionName)) return true;
 
         var logined = ManageProvider.User != null;
@@ -109,7 +114,31 @@ public class CubeController(PageService pageService, TokenService tokenService, 
             {
                 var set = CubeSetting.Current;
                 var (app, ex) = tokenService.TryDecodeToken(token, set.JwtSecret);
-                if (app != null && app.Enable && ex != null) logined = true;
+                // 验签通过（ex == null）且应用有效才放行；验签失败时 ex 非空绝不能放行，防止伪造 JWT 认证绕过
+                if (app != null && app.Enable && ex == null) logined = true;
+            }
+
+            // 回退到 UserToken 验证，并校验 Url 防止水平越权
+            if (!logined)
+            {
+                var ut = UserToken.FindByToken(token);
+                if (ut != null && ut.Enable && ut.Expire > DateTime.Now)
+                {
+                    var utUrl = ut.Url + "";
+                    // attachment: 前缀令牌仅限附件访问（由 CheckAttachmentAccess 处理），此处不放行
+                    if (!utUrl.StartsWithIgnoreCase("attachment:"))
+                    {
+                        // 令牌未锁定 Url → 全局有效；锁定了 Url → 必须与当前请求路径匹配
+                        if (utUrl.IsNullOrEmpty())
+                            logined = true;
+                        else
+                        {
+                            var tokenPath = utUrl.Split('?')[0];
+                            var reqPath = HttpContext.Request.Path.Value + "";
+                            if (reqPath.EqualIgnoreCase(tokenPath)) logined = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -123,7 +152,7 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     {
         var request = httpContext.Request;
         var token = request.Query["Token"] + "";
-        if (token.IsNullOrEmpty()) token = (request.Headers["Authorization"] + "").TrimStart("Bearer ");
+        if (token.IsNullOrEmpty()) token = (request.Headers["Authorization"] + "").TrimPrefix("Bearer ");
         if (token.IsNullOrEmpty()) token = request.Headers["X-Token"] + "";
         if (token.IsNullOrEmpty()) token = request.Cookies["Token"] + "";
 
@@ -135,11 +164,11 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     private static readonly String _OS = Environment.OSVersion + "";
 
     /// <summary>服务器信息，用户健康检测</summary>
-    /// <param name="state">状态信息</param>
+    /// <param name="state">状态信息。可选，用于回显校验</param>
     /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
-    public ActionResult Info(String state)
+    public ActionResult Info(String state = null)
     {
         var asmx = AssemblyX.Entry;
         var conn = HttpContext.Connection;
@@ -223,18 +252,19 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     [HttpGet]
     public ActionResult UserSearch(Int32 roleId = 0, Int32 departmentId = 0, String key = null)
     {
-        var exp = new WhereExpression();
-        if (roleId > 0) exp &= _.RoleID == roleId;
-        if (departmentId > 0) exp &= _.DepartmentID == departmentId;
-        exp &= _.Enable == true;
-        if (!key.IsNullOrEmpty()) exp &= _.Code.StartsWith(key) | _.Name.StartsWith(key) | _.DisplayName.StartsWith(key) | _.Mobile.StartsWith(key);
+        //var exp = new WhereExpression();
+        //if (roleId > 0) exp &= _.RoleID == roleId;
+        //if (departmentId > 0) exp &= _.DepartmentID == departmentId;
+        //exp &= _.Enable == true;
+        //if (!key.IsNullOrEmpty()) exp &= _.Code.StartsWith(key) | _.Name.StartsWith(key) | _.DisplayName.StartsWith(key) | _.Mobile.StartsWith(key);
 
-        var page = new PageParameter { PageSize = 20 };
+        var page = new PageParameter { PageSize = 20, Sort = _.Name };
 
-        // 默认排序
-        if (page.Sort.IsNullOrEmpty()) page.Sort = _.Name;
+        //// 默认排序
+        //if (page.Sort.IsNullOrEmpty()) page.Sort = _.Name;
 
-        var list = XCode.Membership.User.FindAll(exp, page);
+        //var list = XCode.Membership.User.FindAll(exp, page);
+        var list = Search(roleId, departmentId, true, DateTime.MinValue, DateTime.MinValue, key, page);
 
         return Json(0, null, list.Select(e => new
         {
@@ -256,17 +286,18 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     [HttpGet]
     public ActionResult DepartmentSearch(Int32 parentid = -1, String key = null)
     {
-        var exp = new WhereExpression();
-        if (parentid >= 0) exp &= Department._.ParentID == parentid;
-        exp &= Department._.Enable == true & Department._.Visible == true;
-        if (!key.IsNullOrEmpty()) exp &= Department._.Code.StartsWith(key) | Department._.Name.StartsWith(key) | Department._.FullName.StartsWith(key);
+        //var exp = new WhereExpression();
+        //if (parentid >= 0) exp &= Department._.ParentID == parentid;
+        //exp &= Department._.Enable == true & Department._.Visible == true;
+        //if (!key.IsNullOrEmpty()) exp &= Department._.Code.StartsWith(key) | Department._.Name.StartsWith(key) | Department._.FullName.StartsWith(key);
 
-        var page = new PageParameter { PageSize = 20 };
+        var page = new PageParameter { PageSize = 20, Sort = Department._.Name };
 
-        // 默认排序
-        if (page.Sort.IsNullOrEmpty()) page.Sort = Department._.Name;
+        //// 默认排序
+        //if (page.Sort.IsNullOrEmpty()) page.Sort = Department._.Name;
 
-        var list = Department.FindAll(exp, page);
+        //var list = Department.FindAll(exp, page);
+        var list = Department.Search(parentid, true, true, key, page);
 
         return Json(0, null, list.Select(e => new
         {
@@ -309,6 +340,8 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     [HttpGet]
     public ActionResult AreaChilds(Int32 id = 0)
     {
+        AreaController.InitAreaData();
+
         var r = id <= 0 ? AreaX.Root : AreaX.FindByID(id);
         if (r == null) return Json(500, null, "找不到地区");
 
@@ -373,12 +406,16 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     #endregion
 
     #region 头像
-    /// <summary>获取用户头像</summary>
+    /// <summary>获取用户头像。头像文件不存在时根据昵称和性别自动生成 SVG 文字头像</summary>
     /// <param name="id">用户编号</param>
     /// <returns></returns>
+    [AllowAnonymous]
     [HttpGet]
+    [HttpGet("{id}")]
     public virtual ActionResult Avatar(Int32 id)
     {
+        // 如果id为空，尝试从查询路径获取
+        if (id <= 0) id = Request.Query["id"].ToInt();
         if (id <= 0) throw new ArgumentNullException(nameof(id));
 
         var user = ManageProvider.Provider?.FindByID(id) as IUser;
@@ -388,21 +425,60 @@ public class CubeController(PageService pageService, TokenService tokenService, 
         var av = "";
         if (!user.Avatar.IsNullOrEmpty() && !user.Avatar.StartsWith("/"))
         {
-            av = set.AvatarPath.CombinePath(user.Avatar).GetBasePath();
-            if (!System.IO.File.Exists(av)) av = null;
+            // 防路径穿越：仅接受纯文件名（无路径分隔符），外部回填头像地址可能含 .. 或子路径
+            var name = Path.GetFileName(user.Avatar);
+            if (!name.IsNullOrEmpty() && name == user.Avatar)
+            {
+                av = set.AvatarPath.CombinePath(name).GetBasePath();
+                if (!System.IO.File.Exists(av)) av = null;
+            }
         }
 
-        // 用于兼容旧代码
+        // 用于兼容旧代码：按扩展名优先级查找（.png/.svg/.jpg/.gif/.webp）
         if (av.IsNullOrEmpty() && !set.AvatarPath.IsNullOrEmpty())
         {
-            av = set.AvatarPath.CombinePath(user.ID + ".png").GetBasePath();
-            if (!System.IO.File.Exists(av)) av = null;
+            var (found, _) = SvgAvatarService.FindAvatarFile(set.AvatarPath, user.ID);
+            av = found;
         }
 
-        if (!System.IO.File.Exists(av)) throw new Exception("用户头像不存在 " + id);
+        // 兼容头像地址为附件接口 URL 的情况（如 /cube/image?id=xxx.png）：
+        // 解析编号找到附件文件路径，作为普通头像文件路径复用下方逻辑，不经过附件接口
+        if (av.IsNullOrEmpty() && !user.Avatar.IsNullOrEmpty() && user.Avatar.StartsWith("/cube/image?"))
+        {
+            var p = user.Avatar.IndexOf("?id=");
+            if (p >= 0)
+            {
+                var attId = user.Avatar[(p + 4)..];
+                var q = attId.IndexOf('&');
+                if (q >= 0) attId = attId[..q];
+
+                // 去掉仅用于装饰的后缀名
+                var e = attId.IndexOf('.');
+                if (e > 0) attId = attId[..e];
+
+                var att = Attachment.FindById(attId.ToLong());
+                av = att?.GetFilePath();
+                if (!av.IsNullOrEmpty() && !System.IO.File.Exists(av)) av = null;
+            }
+        }
+
+        // 头像文件不存在时，从用户连接中查找远程头像并触发异步下载到本地（懒加载兜底，对齐 MVC）
+        if (av.IsNullOrEmpty() || !System.IO.File.Exists(av))
+        {
+            if (user is IManageUser muser)
+            {
+                var bindingService = HttpContext.RequestServices.GetService<Services.Sso.IUserBindingService>();
+                var remote = bindingService?.TryFetchRemoteAvatar(muser);
+                if (!remote.IsNullOrEmpty()) return Redirect(remote);
+            }
+
+            var svg = SvgAvatarService.Generate(user, set.AvatarChars);
+            return Content(svg, "image/svg+xml");
+        }
 
         var vs = System.IO.File.ReadAllBytes(av);
-        return File(vs, "image/png");
+        var ct = SvgAvatarService.GetContentType(Path.GetExtension(av));
+        return File(vs, ct);
     }
     #endregion
 
@@ -410,6 +486,7 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     /// <summary>查询一批Code的数据源</summary>
     /// <param name="codes"></param>
     /// <returns></returns>
+    [AllowAnonymous]
     [HttpGet]
     public ActionResult Lookup(String codes)
     {
@@ -466,11 +543,31 @@ public class CubeController(PageService pageService, TokenService tokenService, 
         if (!category.EqualIgnoreCase("LayoutSetting"))
             return Json(203, "非授权操作，不允许保存系统布局以外的信息");
 
+        // 防水平越权：仅允许保存当前登录用户自己的布局；系统管理员可代用户设置
+        var cur = ManageProvider.User;
+        if (cur == null || userid != cur.ID && !cur.Roles.Any(e => e.IsSystem))
+            return Json(403, "仅能保存自己的布局设置");
+
         var para = Parameter.GetOrAdd(userid, category, name);
         para.SetItem("Value", value);
         para.Save();
 
         return Json(0, "ok");
+    }
+
+    /// <summary>获取 AI 助手配置。前端浮窗展示所需的开关与配色，由 CubeSetting 配置</summary>
+    /// <returns>返回 AISwitch 开关、主色 PrimaryColor 与辅色 SecondaryColor、Mermaid 图表库地址（默认靛蓝紫渐变）</returns>
+    [HttpGet]
+    public ActionResult GetAiConfig()
+    {
+        var set = CubeSetting.Current;
+        return Json(0, null, new
+        {
+            set.AISwitch,
+            set.AIPrimaryColor,
+            set.AISecondaryColor,
+            MermaidUrl = set.GetMermaidUrl(),
+        });
     }
 
     /// <summary>获取页面配置信息。列表页、表单页所需显示字段，以及各字段显示方式</summary>
@@ -492,8 +589,86 @@ public class CubeController(PageService pageService, TokenService tokenService, 
     [HttpPost]
     public ActionResult SetPageConfig(String kind, String page, [FromBody] JsonElement value)
     {
-        var rs = pageService.SetPageConfig(kind, page, value.ToDictionary());
+        // 当前登录用户配置优先；未登录时写全局配置
+        var rs = pageService.SetPageConfig(kind, page, value.ToDictionary(), CurrentUser?.ID ?? 0);
         return Json(0, null, rs);
+    }
+
+    /// <summary>获取菜单树（按当前登录用户角色过滤，仅返回该用户有权访问的菜单）</summary>
+    /// <param name="module">模块名称，如 Admin；为空时返回全部菜单</param>
+    /// <returns>菜单树</returns>
+    // 参数必须给默认值 = null：.NET 8+ [ApiController] 会把无默认值的非空引用类型参数（Nullable=annotations 下 String 视为不可空）
+    // 隐式推断为 [Required]，导致前端无参调用 /Cube/MenuTree 报 “The module field is required.”，登录后左侧无菜单。
+    [HttpGet]
+    public ActionResult MenuTree(String module = null) => Json(0, null, BuildMenuTree(module));
+
+    private IList<MenuTree> BuildMenuTree(String module)
+    {
+        var fact = ManageProvider.Menu;
+        var menus = fact.Root.Childs;
+
+        // 根据模块过滤菜单
+        if (module.EqualIgnoreCase("base"))
+        {
+            var ms = menus.FirstOrDefault(e => e.Name.EqualIgnoreCase("base"))?.Childs ?? [];
+            foreach (var item in menus)
+            {
+                if (!item.Name.EqualIgnoreCase("base") && item.Childs.All(e => e.Childs.Count == 0))
+                    ms.Add(item);
+            }
+            menus = ms;
+        }
+        else if (!module.IsNullOrEmpty())
+            menus = menus.FirstOrDefault(e => e.Name.EqualIgnoreCase(module))?.Childs ?? [];
+
+        // 如果顶级只有一层，并且至少有三级目录，则提升一级
+        if (menus.Count == 1 && menus[0].Childs.All(m => m.Childs.Count > 0)) { menus = menus[0].Childs; }
+
+        // 按当前用户角色过滤菜单：
+        // allowedIds       —— 当前用户角色可访问的菜单ID集合（来自各角色的 Resources）
+        // permissionedIds —— 被纳入权限系统的菜单ID集合（任一角色分配过即视为“已声明所需权限”）
+        // 规则：未声明所需权限的菜单默认有权限（对所有登录用户可见）；已声明的仅对拥有该权限的角色可见
+        // 多租户门控：未开启多租户时，隐藏所有租户相关菜单（控制器声明了 MenuModes.Tenant 的）
+        // 说明：Visible=false 的隐藏菜单（如 [Menu(0,false)] 的 UserOnline/UserStat）也保留返回，
+        //       前端用它解析标签页标题等；导航渲染时按 Visible 字段自行过滤
+        var user = ManageProvider.Provider.Current as IUser;
+        var set = CubeSetting.Current;
+        var allowTenant = set.EnableTenant;
+        var allowedIds = user?.Roles?.SelectMany(r => r.Resources).ToArray() ?? [];
+        var permissionedIds = Role.FindAll().SelectMany(r => r.Resources).ToArray();
+
+        Boolean IsAccessible(IMenu m) => (allowedIds.Contains(m.ID) || !permissionedIds.Contains(m.ID))
+            && (allowTenant || !NewLife.Cube.Membership.MenuHelper.IsTenantMenu(m));
+
+        menus = menus.Where(IsAccessible).ToList();
+
+        var menuTree = ViewModels.MenuTree.GetMenuTree(pMenuTree =>
+        {
+            // 递归按当前用户角色过滤子菜单
+            var parent = fact.FindByID(pMenuTree.ID);
+            var subMenus = parent?.Childs?.Where(IsAccessible).ToList() as IList<IMenu> ?? [];
+            return subMenus;
+        }, list =>
+        {
+            if (list == null || list.Count == 0) return null;
+            var menuList = (from menu in list
+                            select new ViewModels.MenuTree
+                            {
+                                ID = menu.ID,
+                                Name = menu.Name,
+                                DisplayName = menu.DisplayName ?? menu.Name,
+                                FullName = menu.FullName,
+                                Url = menu.Url,
+                                Icon = menu.Icon,
+                                Visible = menu.Visible,
+                                NewWindow = menu.NewWindow,
+                                ParentID = menu.ParentID,
+                                Permissions = menu.Permissions
+                            }).ToList();
+            return menuList.Count > 0 ? menuList : null;
+        }, menus);
+
+        return menuTree;
     }
     #endregion
 
@@ -515,9 +690,21 @@ public class CubeController(PageService pageService, TokenService tokenService, 
         var att = Attachment.FindById(id.ToLong());
         if (att == null) return NotFound("找不到附件信息");
 
+        // 细粒度附件访问权限校验
+        var denied = CheckAttachmentAccess(att);
+        if (denied != null) return denied;
+
         att.Downloads++;
         att.LastDownload = DateTime.Now;
         att.SaveAsync(5_000);
+
+        // 云存储附件：直接返回预签名Url
+        if (!att.IsLocalStorage())
+        {
+            var url = AttachmentProvider.Provider.GetUrl(att.FilePath);
+            if (url.IsNullOrEmpty()) return NotFound("找不到附件文件");
+            return Redirect(url);
+        }
 
         // 如果附件不存在，则抓取
         var filePath = att.GetFilePath();
@@ -556,9 +743,21 @@ public class CubeController(PageService pageService, TokenService tokenService, 
         var att = Attachment.FindById(id.ToLong());
         if (att == null) return NotFound("找不到附件信息");
 
+        // 细粒度附件访问权限校验
+        var denied = CheckAttachmentAccess(att);
+        if (denied != null) return denied;
+
         att.Downloads++;
         att.LastDownload = DateTime.Now;
         att.SaveAsync(5_000);
+
+        // 云存储附件：直接返回预签名Url
+        if (!att.IsLocalStorage())
+        {
+            var url = AttachmentProvider.Provider.GetUrl(att.FilePath);
+            if (url.IsNullOrEmpty()) return NotFound("找不到附件文件");
+            return Redirect(url);
+        }
 
         // 如果附件不存在，则抓取
         var filePath = att.GetFilePath();
@@ -578,6 +777,65 @@ public class CubeController(PageService pageService, TokenService tokenService, 
             return PhysicalFile(filePath, att.ContentType, att.FileName);
         else
             return PhysicalFile(filePath, "application/octet-stream", att.FileName, true);
+    }
+    #endregion
+
+    #region 权限辅助
+    /// <summary>检查附件访问权限</summary>
+    /// <param name="att">附件对象</param>
+    /// <returns>null=允许访问；StatusCode(401)=未登录；StatusCode(403)=无权限</returns>
+    private ActionResult CheckAttachmentAccess(Attachment att)
+    {
+        var set = CubeSetting.Current;
+
+        // 全局关闭验证 → 所有人公开访问所有附件
+        if (!set.ValidateAttachment) return null;
+
+        var category = att.Category + "";
+
+        // 检查公开分类：无需登录即可访问
+        if (!set.PublicAttachmentCategories.IsNullOrEmpty())
+        {
+            var publicCats = set.PublicAttachmentCategories.Split(',');
+            if (publicCats.Any(c => c.Trim().EqualIgnoreCase(category))) return null;
+        }
+
+        // 检查分享令牌：未登录时凭有效 UserToken 也可访问该附件
+        var shareToken = GetToken(HttpContext);
+        if (!shareToken.IsNullOrEmpty())
+        {
+            var ut = UserToken.FindByToken(shareToken);
+            if (ut != null && ut.Enable && ut.Expire > DateTime.Now && ut.Url.EqualIgnoreCase($"attachment:{att.Id}"))
+            {
+                // 更新使用统计
+                var ip = HttpContext.GetUserHost() + "";
+                ut.Times++;
+                if (ut.FirstTime.Year < 2000)
+                {
+                    ut.FirstIP = ip;
+                    ut.FirstTime = DateTime.Now;
+                }
+                ut.LastIP = ip;
+                ut.LastTime = DateTime.Now;
+                ut.SaveAsync(5_000);
+
+                return null;
+            }
+        }
+
+        // 其余分类需要登录
+        var user = ManageProvider.User;
+        if (user == null) return StatusCode(401);
+
+        // 检查仅所有者可访问的分类：必须是上传人本人
+        if (!set.OwnerOnlyAttachmentCategories.IsNullOrEmpty())
+        {
+            var ownerCats = set.OwnerOnlyAttachmentCategories.Split(',');
+            if (ownerCats.Any(c => c.Trim().EqualIgnoreCase(category)) && att.CreateUserID != user.ID)
+                return StatusCode(403);
+        }
+
+        return null;
     }
     #endregion
 }

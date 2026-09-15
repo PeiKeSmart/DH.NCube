@@ -62,6 +62,14 @@ public partial class AccessRule : IEntity<AccessRuleModel>
     [BindColumn("Url", "URL路径。支持*模糊匹配，多个逗号隔开", "")]
     public String Url { get => _Url; set { if (OnPropertyChanging("Url", value)) { _Url = value; OnPropertyChanged("Url"); } } }
 
+    private String _ResponseCodes;
+    /// <summary>触发响应码。检测HTTP响应码，多个逗号隔开，如404,403。设置后在响应完成后检测，超阈值封禁IP</summary>
+    [DisplayName("触发响应码")]
+    [Description("触发响应码。检测HTTP响应码，多个逗号隔开，如404,403。设置后在响应完成后检测，超阈值封禁IP")]
+    [DataObjectField(false, false, true, 200)]
+    [BindColumn("ResponseCodes", "触发响应码。检测HTTP响应码，多个逗号隔开，如404,403。设置后在响应完成后检测，超阈值封禁IP", "")]
+    public String ResponseCodes { get => _ResponseCodes; set { if (OnPropertyChanging("ResponseCodes", value)) { _ResponseCodes = value; OnPropertyChanged("ResponseCodes"); } } }
+
     private String _UserAgent;
     /// <summary>用户代理。支持*模糊匹配，多个逗号隔开</summary>
     [DisplayName("用户代理")]
@@ -133,6 +141,14 @@ public partial class AccessRule : IEntity<AccessRuleModel>
     [DataObjectField(false, false, false, 0)]
     [BindColumn("LimitTimes", "限流次数。限流考察期间达到该阈值时，执行拦截", "")]
     public Int32 LimitTimes { get => _LimitTimes; set { if (OnPropertyChanging("LimitTimes", value)) { _LimitTimes = value; OnPropertyChanged("LimitTimes"); } } }
+
+    private DateTime _ExpireTime;
+    /// <summary>过期时间。到期后本规则自动失效；未设置表示永久有效。仅供系统自动封禁使用</summary>
+    [DisplayName("过期时间")]
+    [Description("过期时间。到期后本规则自动失效；未设置表示永久有效。仅供系统自动封禁使用")]
+    [DataObjectField(false, false, true, 0)]
+    [BindColumn("ExpireTime", "过期时间。到期后本规则自动失效；未设置表示永久有效。仅供系统自动封禁使用", "", ShowIn = "List,Detail")]
+    public DateTime ExpireTime { get => _ExpireTime; set { if (OnPropertyChanging("ExpireTime", value)) { _ExpireTime = value; OnPropertyChanged("ExpireTime"); } } }
 
     private Int32 _CreateUserID;
     /// <summary>创建者</summary>
@@ -208,6 +224,7 @@ public partial class AccessRule : IEntity<AccessRuleModel>
         Enable = model.Enable;
         Priority = model.Priority;
         Url = model.Url;
+        ResponseCodes = model.ResponseCodes;
         UserAgent = model.UserAgent;
         IP = model.IP;
         LoginedUser = model.LoginedUser;
@@ -217,6 +234,7 @@ public partial class AccessRule : IEntity<AccessRuleModel>
         LimitDimension = model.LimitDimension;
         LimitCycle = model.LimitCycle;
         LimitTimes = model.LimitTimes;
+        ExpireTime = model.ExpireTime;
         CreateUserID = model.CreateUserID;
         CreateTime = model.CreateTime;
         CreateIP = model.CreateIP;
@@ -240,6 +258,7 @@ public partial class AccessRule : IEntity<AccessRuleModel>
             "Enable" => _Enable,
             "Priority" => _Priority,
             "Url" => _Url,
+            "ResponseCodes" => _ResponseCodes,
             "UserAgent" => _UserAgent,
             "IP" => _IP,
             "LoginedUser" => _LoginedUser,
@@ -249,6 +268,7 @@ public partial class AccessRule : IEntity<AccessRuleModel>
             "LimitDimension" => _LimitDimension,
             "LimitCycle" => _LimitCycle,
             "LimitTimes" => _LimitTimes,
+            "ExpireTime" => _ExpireTime,
             "CreateUserID" => _CreateUserID,
             "CreateTime" => _CreateTime,
             "CreateIP" => _CreateIP,
@@ -267,6 +287,7 @@ public partial class AccessRule : IEntity<AccessRuleModel>
                 case "Enable": _Enable = value.ToBoolean(); break;
                 case "Priority": _Priority = value.ToInt(); break;
                 case "Url": _Url = Convert.ToString(value); break;
+                case "ResponseCodes": _ResponseCodes = Convert.ToString(value); break;
                 case "UserAgent": _UserAgent = Convert.ToString(value); break;
                 case "IP": _IP = Convert.ToString(value); break;
                 case "LoginedUser": _LoginedUser = Convert.ToString(value); break;
@@ -276,6 +297,7 @@ public partial class AccessRule : IEntity<AccessRuleModel>
                 case "LimitDimension": _LimitDimension = (LimitDimensions)value.ToInt(); break;
                 case "LimitCycle": _LimitCycle = value.ToInt(); break;
                 case "LimitTimes": _LimitTimes = value.ToInt(); break;
+                case "ExpireTime": _ExpireTime = value.ToDateTime(); break;
                 case "CreateUserID": _CreateUserID = value.ToInt(); break;
                 case "CreateTime": _CreateTime = value.ToDateTime(); break;
                 case "CreateIP": _CreateIP = Convert.ToString(value); break;
@@ -338,6 +360,9 @@ public partial class AccessRule : IEntity<AccessRuleModel>
         /// <summary>URL路径。支持*模糊匹配，多个逗号隔开</summary>
         public static readonly Field Url = FindByName("Url");
 
+        /// <summary>触发响应码。检测HTTP响应码，多个逗号隔开，如404,403。设置后在响应完成后检测，超阈值封禁IP</summary>
+        public static readonly Field ResponseCodes = FindByName("ResponseCodes");
+
         /// <summary>用户代理。支持*模糊匹配，多个逗号隔开</summary>
         public static readonly Field UserAgent = FindByName("UserAgent");
 
@@ -364,6 +389,9 @@ public partial class AccessRule : IEntity<AccessRuleModel>
 
         /// <summary>限流次数。限流考察期间达到该阈值时，执行拦截</summary>
         public static readonly Field LimitTimes = FindByName("LimitTimes");
+
+        /// <summary>过期时间。到期后本规则自动失效；未设置表示永久有效。仅供系统自动封禁使用</summary>
+        public static readonly Field ExpireTime = FindByName("ExpireTime");
 
         /// <summary>创建者</summary>
         public static readonly Field CreateUserID = FindByName("CreateUserID");
@@ -407,6 +435,9 @@ public partial class AccessRule : IEntity<AccessRuleModel>
         /// <summary>URL路径。支持*模糊匹配，多个逗号隔开</summary>
         public const String Url = "Url";
 
+        /// <summary>触发响应码。检测HTTP响应码，多个逗号隔开，如404,403。设置后在响应完成后检测，超阈值封禁IP</summary>
+        public const String ResponseCodes = "ResponseCodes";
+
         /// <summary>用户代理。支持*模糊匹配，多个逗号隔开</summary>
         public const String UserAgent = "UserAgent";
 
@@ -433,6 +464,9 @@ public partial class AccessRule : IEntity<AccessRuleModel>
 
         /// <summary>限流次数。限流考察期间达到该阈值时，执行拦截</summary>
         public const String LimitTimes = "LimitTimes";
+
+        /// <summary>过期时间。到期后本规则自动失效；未设置表示永久有效。仅供系统自动封禁使用</summary>
+        public const String ExpireTime = "ExpireTime";
 
         /// <summary>创建者</summary>
         public const String CreateUserID = "CreateUserID";

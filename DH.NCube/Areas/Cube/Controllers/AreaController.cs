@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using Microsoft.AspNetCore.Mvc;
 using NewLife.Cube.ViewModels;
 using NewLife.Web;
 using XCode;
@@ -10,7 +11,7 @@ namespace NewLife.Cube.Areas.Cube.Controllers;
 /// <summary>地区</summary>
 [DisplayName("地区")]
 [CubeArea]
-[Menu(50, true, Icon = "fa-area-chart")]
+[Menu(50, true, Icon = "DataLine")]
 public class AreaController : EntityController<Area, AreaModel>
 {
     static AreaController()
@@ -34,28 +35,36 @@ public class AreaController : EntityController<Area, AreaModel>
         //AddFormFields.AddField("ID");
     }
 
-    private static Boolean _inited;
-
-    /// <summary>搜索数据集</summary>
-    /// <param name="p"></param>
-    /// <returns></returns>
-    protected override IEnumerable<Area> Search(Pager p)
+    private static Int32 _inited;
+    /// <summary>初始化地区数据</summary>
+    public static void InitAreaData()
     {
-        if (!_inited)
+        if (_inited == 0 && Interlocked.CompareExchange(ref _inited, 1, 0) == 0)
         {
-            _inited = true;
-
             // 异步初始化数据
             //if (Area.Meta.Count == 0) ThreadPoolX.QueueUserWorkItem(() => Area.FetchAndSave());
             // 必须同步初始化，否则无法取得当前登录用户信息
             //if (Area.Meta.Count == 0) Area.FetchAndSave();
             if (Area.Meta.Count == 0)
             {
-                // 先加载民政部数据，然后导入旧版数据
-                FetchAndSave(null);
-                Import("http://x.newlifex.com/Area.csv.gz", true, 4, false);
+                Task.Factory.StartNew(() =>
+                {
+                    // 先加载民政部数据，然后导入旧版数据
+                    FetchAndSave(null);
+
+                    var url = NewLife.Setting.Current.PluginServer.TrimSuffix("/");
+                    Import(url + "/Area.csv.gz", true, 4, true);
+                }, TaskCreationOptions.LongRunning);
             }
         }
+    }
+
+    /// <summary>搜索数据集</summary>
+    /// <param name="p"></param>
+    /// <returns></returns>
+    protected override IEnumerable<Area> Search(Pager p)
+    {
+        InitAreaData();
 
         var id = p["id"].ToInt(-1);
         if (id < 0) id = p["q"].ToInt(-1);
@@ -100,4 +109,29 @@ public class AreaController : EntityController<Area, AreaModel>
 
     //    return View("Map");
     //}
+
+    /// <summary>中国地图数据：省级 + 有经纬度城市散点，供 React 地图模式渲染（对齐 MVC Map.cshtml）</summary>
+    /// <returns>省份与城市经纬度列表</returns>
+    [HttpGet("/api/[area]/[controller]/Map")]
+    [EntityAuthorize(PermissionFlags.Detail)]
+    public ActionResult Map()
+    {
+        InitAreaData();
+
+        // 缓存一次全量加载，避免逐省查询子级（对齐 MVC Root.Childs 语义）
+        var all = Area.FindAllWithCache();
+
+        // 省级（父级为根 0）且有经纬度
+        var provinces = all.Where(e => e.ParentID == 0 && (e.Longitude != 0 || e.Latitude != 0)).ToList();
+        var provIds = provinces.Select(e => e.ID).ToHashSet();
+
+        // 城市（省直下）且有经纬度
+        var cities = all.Where(e => provIds.Contains(e.ParentID) && e.Longitude > 0 && e.Latitude > 0).ToList();
+
+        return Json(0, null, new
+        {
+            provinces = provinces.Select(e => new { e.Name, e.Longitude, e.Latitude, e.Kind }),
+            cities = cities.Select(e => new { e.Name, e.Longitude, e.Latitude }),
+        });
+    }
 }

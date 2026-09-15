@@ -34,6 +34,7 @@ public partial class EntityController<TEntity, TModel>
         }
         catch (Exception ex)
         {
+            DefaultSpan.Current?.SetError(ex);
             var err = ex.GetTrue().Message;
             WriteLog("Delete", false, err);
 
@@ -70,17 +71,16 @@ public partial class EntityController<TEntity, TModel>
 
         // 记下添加前的来源页，待会添加成功以后跳转
         // 如果列表页有查询条件，优先使用
-        var key = $"Cube_Add_{typeof(TEntity).FullName}";
+        String returnUrl;
         if (Session[CacheKey] is Pager p)
         {
             var sb = p.GetBaseUrl(true, true, true);
-            if (sb.Length > 0)
-                Session[key] = "Index?" + sb;
-            else
-                Session[key] = Request.GetReferer();
+            returnUrl = sb.Length > 0 ? "Index?" + sb : Request.GetReferer();
         }
         else
-            Session[key] = Request.GetReferer();
+            returnUrl = Request.GetReferer();
+
+        ViewBag.ReturnUrl = returnUrl;
 
         // 用于显示的列
         ViewBag.Fields = OnGetFields(ViewKinds.AddForm, entity);
@@ -95,6 +95,7 @@ public partial class EntityController<TEntity, TModel>
     [HttpPost]
     public virtual async Task<ActionResult> Add(TModel model)
     {
+        var returnUrl = GetRequest("returnUrl");
         // 实例化实体对象，然后拷贝
         if (model is not TEntity entity)
         {
@@ -126,6 +127,8 @@ public partial class EntityController<TEntity, TModel>
         }
         catch (Exception ex)
         {
+            DefaultSpan.Current?.SetError(ex);
+
             var code = ex is ApiException ae ? ae.Code : 500;
             var err = ex.Message;
             ModelState.AddModelError((ex as ArgumentException)?.ParamName ?? "", ex.Message);
@@ -139,6 +142,7 @@ public partial class EntityController<TEntity, TModel>
 
             if (IsJsonRequest) return Json(code, ViewBag.StatusMessage);
 
+            ViewBag.ReturnUrl = returnUrl;
             ViewBag.Fields = OnGetFields(ViewKinds.AddForm, entity);
 
             return View("AddForm", entity);
@@ -148,9 +152,7 @@ public partial class EntityController<TEntity, TModel>
 
         if (IsJsonRequest) return Json(0, ViewBag.StatusMessage);
 
-        var key = $"Cube_Add_{typeof(TEntity).FullName}";
-        var url = Session[key] as String;
-        if (!url.IsNullOrEmpty()) return Redirect(url);
+        if (!returnUrl.IsNullOrEmpty()) return Redirect(returnUrl);
 
         // 新增完成跳到列表页，更新完成保持本页
         return RedirectToAction("Index");
@@ -170,17 +172,16 @@ public partial class EntityController<TEntity, TModel>
         Valid(entity, DataObjectMethodType.Update, false);
 
         // 如果列表页有查询条件，优先使用
-        var key = $"Cube_Edit_{typeof(TEntity).FullName}-{id}";
+        String returnUrl;
         if (Session[CacheKey] is Pager p)
         {
             var sb = p.GetBaseUrl(true, true, true);
-            if (sb.Length > 0)
-                Session[key] = "../Index?" + sb;
-            else
-                Session[key] = Request.GetReferer();
+            returnUrl = sb.Length > 0 ? "../Index?" + sb : Request.GetReferer();
         }
         else
-            Session[key] = Request.GetReferer();
+            returnUrl = Request.GetReferer();
+
+        ViewBag.ReturnUrl = returnUrl;
 
         // Json输出
         if (IsJsonRequest) return Json(0, null, entity);
@@ -197,6 +198,8 @@ public partial class EntityController<TEntity, TModel>
     [HttpPost]
     public virtual async Task<ActionResult> Edit(TModel model)
     {
+        var returnUrl = GetRequest("returnUrl");
+
         // 实例化实体对象，然后拷贝
         if (model is not TEntity entity)
         {
@@ -229,6 +232,7 @@ public partial class EntityController<TEntity, TModel>
         }
         catch (Exception ex)
         {
+            DefaultSpan.Current?.SetError(ex);
             err = ex.Message;
             ModelState.AddModelError((ex as ArgumentException)?.ParamName ?? "", ex.Message);
         }
@@ -251,14 +255,13 @@ public partial class EntityController<TEntity, TModel>
             if (IsJsonRequest) return Json(0, ViewBag.StatusMessage);
 
             // 实体对象保存成功后直接重定向到列表页，减少用户操作提高操作体验
-            var key = $"Cube_Edit_{typeof(TEntity).FullName}-{id}";
-            var url = Session[key] as String;
-            if (!url.IsNullOrEmpty()) return Redirect(url);
+            if (!returnUrl.IsNullOrEmpty()) return Redirect(returnUrl);
         }
 
         // 重新查找对象数据，以确保取得最新值
         if (id != null) entity = FindData(id);
 
+        ViewBag.ReturnUrl = returnUrl;
         ViewBag.Fields = OnGetFields(ViewKinds.EditForm, entity);
 
         return View("EditForm", entity);
@@ -323,6 +326,7 @@ public partial class EntityController<TEntity, TModel>
         }
         catch (Exception ex)
         {
+            DefaultSpan.Current?.SetError(ex);
             XTrace.WriteException(ex);
 
             WriteLog("导入Excel", false, ex.GetMessage());
@@ -445,7 +449,8 @@ public partial class EntityController<TEntity, TModel>
                 }
             }
 
-            total = updates.Count;
+            // 统计待处理行数 = 软删 + 硬删，避免纯硬删场景 total 为 0 造成文案误导
+            total = updates.Count + deletes.Count;
             success += updates.Update();
             success += deletes.Delete();
 
@@ -529,6 +534,8 @@ public partial class EntityController<TEntity, TModel>
     {
         if (file == null || file.Length <= 0) return RedirectToAction("Index");
 
+        WriteLog(nameof(ImportFile), true, $"开始导入文件[{file.FileName}]，大小[{file.Length:n0}]字节，类型[{file.ContentType}]");
+
         var factory = Factory;
         var page = GetCachePager();
         var stream = file.OpenReadStream();
@@ -550,6 +557,9 @@ public partial class EntityController<TEntity, TModel>
     #endregion
 
     #region 同步/还原
+    // 复用 HttpClient，避免每次同步创建连接导致端口耗尽
+    private static readonly HttpClient _httpClient = new();
+
     /// <summary>同步数据</summary>
     /// <returns></returns>
     [NonAction]
@@ -580,17 +590,12 @@ public partial class EntityController<TEntity, TModel>
         var ctrl = cs[0].IsNullOrEmpty() ? cs[1] : $"{cs[0]}/{cs[1]}";
         if (!mds.Contains(ctrl)) throw new InvalidOperationException($"[{ctrl}]未配置为允许同步 Sync:Models");
 
-        // 创建客户端，准备发起请求
+        // 复用静态 HttpClient，避免每次同步创建连接导致端口耗尽
         var url = server.EnsureEnd("/") + $"{ctrl}/Json/{token}?PageSize=100000";
-
-        var http = new HttpClient
-        {
-            BaseAddress = new Uri(url)
-        };
 
         var sw = Stopwatch.StartNew();
 
-        var list = await http.InvokeAsync<TEntity[]>(HttpMethod.Get, null);
+        var list = await _httpClient.InvokeAsync<TEntity[]>(HttpMethod.Get, url);
 
         sw.Stop();
 
@@ -608,7 +613,11 @@ public partial class EntityController<TEntity, TModel>
             {
                 fact.Session.Truncate();
             }
-            catch (Exception ex) { XTrace.WriteException(ex); }
+            catch (Exception ex)
+            {
+                DefaultSpan.Current?.SetError(ex);
+                XTrace.WriteException(ex);
+            }
 
             // 插入
             //ms.All(e => { e.AllChilds = new List<Menu>(); return true; });

@@ -1,4 +1,4 @@
-﻿@model EntityField
+@model EntityField
 @using NewLife;
 @using NewLife.Cube;
 @using Microsoft.AspNetCore.Routing
@@ -9,10 +9,11 @@
     var entity = Model.Entity;
     var item = Model.Field;
     var factory = entity.GetType().AsFactory();
+    var page = ViewBag.Page as Pager;
+    var listField = item as ListField;
 
     var value = entity[item.Name];
     var provider = ManageProvider.Provider;
-    var listField = item as ListField;
 
     // 第二名称，去掉后面的数字，便于模式匹配
     var digits = new[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
@@ -83,13 +84,15 @@ else
             else if (item.ItemType.EqualIgnoreCase("percent", "Percentage"))
             {
                 var dd = value.ToDouble();
+                var scale = item.Scale;
                 var des = item.Description + "";
-                if (des.Contains("十分之一")) { dd /= 10; }
-                if (des.Contains("百分之一")) { dd /= 100; }
-                if (des.Contains("千分之一")) { dd /= 1000; }
-                if (des.Contains("万分之一")) { dd /= 10000; }
+                if (des.Contains("十分之一")) { dd /= 10; scale += 1; }
+                if (des.Contains("百分之一")) { dd /= 100; scale += 2; }
+                if (des.Contains("千分之一")) { dd /= 1000; scale += 3; }
+                if (des.Contains("万分之一")) { dd /= 10000; scale += 4; }
+                scale = scale >= 2 ? scale - 2 : 0;
 
-                <td class="text-end">@dd.ToString("p2")</td>
+                <td class="text-end">@dd.ToString("p" + scale)</td>
             }
             else
             {
@@ -142,13 +145,15 @@ else
             else if (item.ItemType.EqualIgnoreCase("percent", "Percentage"))
             {
                 var dd = Convert.ToDouble(value);
+                var scale = item.Scale;
                 var des = item.Description + "";
-                if (des.Contains("十分之一")) { dd /= 10; }
-                if (des.Contains("百分之一")) { dd /= 100; }
-                if (des.Contains("千分之一")) { dd /= 1000; }
-                if (des.Contains("万分之一")) { dd /= 10000; }
+                if (des.Contains("十分之一")) { dd /= 10; scale += 1; }
+                if (des.Contains("百分之一")) { dd /= 100; scale += 2; }
+                if (des.Contains("千分之一")) { dd /= 1000; scale += 3; }
+                if (des.Contains("万分之一")) { dd /= 10000; scale += 4; }
+                scale = scale >= 2 ? scale - 2 : 0;
 
-                <td class="text-end">@dd.ToString("p2")</td>
+                <td class="text-end">@dd.ToString("p" + scale)</td>
             }
             else
             {
@@ -163,10 +168,9 @@ else
                 {
                     if (item.MapProvider != null)
                     {
-                        var name = item.MapProvider.EntityType.Name;
-                        var key = item.MapProvider.Key;
+                        var href = listField?.GetUrl(entity, page);
                         val = entity[item.MapField];
-                        <td><a href="@name?@key=@val">@value</a></td>
+                        <td><a href="@href">@value</a></td>
                     }
                     else
                     {

@@ -1,35 +1,46 @@
 ﻿using NewLife.Collections;
+using NewLife.Cube.Enums;
 using XCode.Membership;
 
 namespace NewLife.Cube.Areas.Admin.Models;
 
-/// <summary>
-/// 继承此接口，可通过json方式传值
-/// </summary>
-public interface ICubeModel
-{
+/// <summary> 继承此接口，可通过json方式传值 </summary>
+public interface ICubeModel { }
 
-}
-
-/// <summary>
-/// 登录模型
-/// </summary>
+/// <summary> 登录模型 </summary>
 public class LoginModel : ICubeModel
 {
-    /// <summary>
-    /// 登录用户名
-    /// </summary>
+    /// <summary>登录类型</summary>
+    public AuthCategory Category { get; set; } = AuthCategory.Password;
+
+    /// <summary> 登录用户名、手机号码、邮箱 </summary>
     public String Username { get; set; }
 
-    /// <summary>
-    /// 密码
-    /// </summary>
+    /// <summary> 密码 </summary>
     public String Password { get; set; }
 
-    /// <summary>
-    /// 记住登录状态
-    /// </summary>
+    /// <summary> 记住登录状态 </summary>
     public Boolean Remember { get; set; }
+
+    /// <summary> 挑战标识。调用 /Auth/Challenge 获取，登录时原样回传；仅当关闭明文密码（AllowPlainPassword=false）时必填 </summary>
+    /// <remarks>
+    /// 必须声明为可空：项目开启 Nullable(annotations) 且控制器带 [ApiController] 时，
+    /// 无默认值的非空引用类型属性会被框架隐式推断为 [Required] 并自动 400，
+    /// 导致仅在“需要验证码/挑战”时才使用的可选字段被当成必填，明文密码登录被误拦
+    /// （症状：POST /Auth/Login 报 “The Pkey field is required.” 等字段错误）。
+    /// 真实必填校验由服务层按 CubeSetting 配置执行，返回准确的业务提示。
+    /// </remarks>
+    public String? ChallengeId { get; set; }
+
+    /// <summary>验证码 ID。调用 /Auth/Captcha 获取，登录时原样回传；仅在登录场景需要验证码时必填 </summary>
+    public String? CaptchaId { get; set; }
+
+    /// <summary>验证码用户输入。仅在登录场景需要验证码时必填 </summary>
+    public String? CaptchaCode { get; set; }
+
+    /// <summary> 兼容旧版字段，建议改用 ChallengeId </summary>
+    [Obsolete("Use ChallengeId instead")]
+    public String? Pkey { get => ChallengeId; set => ChallengeId = value; }
 }
 
 
@@ -57,14 +68,157 @@ public class RegisterModel : ICubeModel
     public String Password2 { get; set; }
 }
 
-/// <summary>
-/// 用户信息
-/// </summary>
+/// <summary>统一认证注册模型</summary>
+public class AuthRegisterModel : ICubeModel
+{
+    /// <summary>注册类型</summary>
+    public AuthCategory Category { get; set; } = AuthCategory.Password;
+
+    /// <summary>用户名</summary>
+    public String Username { get; set; }
+
+    /// <summary>邮箱</summary>
+    public String Email { get; set; }
+
+    /// <summary>手机号</summary>
+    public String Mobile { get; set; }
+
+    /// <summary>密码</summary>
+    public String Password { get; set; }
+
+    /// <summary>确认密码</summary>
+    public String ConfirmPassword { get; set; }
+
+    /// <summary>验证码（手机/邮箱注册时必填）</summary>
+    public String Code { get; set; }
+
+    /// <summary>OAuth 临时令牌（category=oauth 时必填）</summary>
+    public String OAuthToken { get; set; }
+
+    /// <summary>验证码 ID。调用 /Auth/Captcha 获取，注册时原样回传；仅在注册场景需要验证码时必填 </summary>
+    public String CaptchaId { get; set; }
+
+    /// <summary>验证码用户输入。仅在注册场景需要验证码时必填 </summary>
+    public String CaptchaCode { get; set; }
+
+    /// <summary>兼容旧版字段，建议改用 ConfirmPassword</summary>
+    [Obsolete("Use ConfirmPassword instead")]
+    public String Password2 { get => ConfirmPassword; set => ConfirmPassword = value; }
+}
+
+/// <summary>注册结果。正常注册返回访问令牌，需要邮箱/手机验证时返回待激活信息</summary>
+public class RegisterResult
+{
+    /// <summary>访问令牌。待激活时为 null</summary>
+    public String AccessToken { get; set; }
+
+    /// <summary>刷新令牌。待激活时为 null</summary>
+    public String RefreshToken { get; set; }
+
+    /// <summary>是否待激活。true 表示注册成功但需先激活邮箱/手机后才能登录</summary>
+    public Boolean PendingActivation { get; set; }
+
+    /// <summary>已发送激活的渠道列表。mail/sms</summary>
+    public String[] Channels { get; set; }
+
+    /// <summary>对应渠道的脱敏目标。与 Channels 一一对应</summary>
+    public String[] Targets { get; set; }
+
+    /// <summary>激活有效期（秒）</summary>
+    public Int32 ExpireIn { get; set; }
+}
+
+/// <summary>待激活注册信息。注册后需激活邮箱/手机才能登录</summary>
+public class ActivatePendingModel
+{
+    /// <summary>已发送激活的渠道列表。mail/sms</summary>
+    public String[] Channels { get; set; }
+
+    /// <summary>对应渠道的脱敏目标。与 Channels 一一对应</summary>
+    public String[] Targets { get; set; }
+
+    /// <summary>激活有效期（秒）</summary>
+    public Int32 ExpireIn { get; set; } = 3600;
+}
+
+/// <summary>联系方式验证状态。安全中心验证/更换后返回</summary>
+public class VerifyStatusModel
+{
+    /// <summary>邮箱已验证</summary>
+    public Boolean MailVerified { get; set; }
+
+    /// <summary>手机已验证</summary>
+    public Boolean MobileVerified { get; set; }
+}
+
+/// <summary>激活模型。邮箱/手机验证码激活</summary>
+public class ActivateModel
+{
+    /// <summary>渠道。mail/sms</summary>
+    public String Channel { get; set; }
+
+    /// <summary>邮箱或手机号</summary>
+    public String Account { get; set; }
+
+    /// <summary>验证码</summary>
+    public String Code { get; set; }
+}
+
+/// <summary>验证联系方式模型。安全中心验证/更换邮箱或手机</summary>
+public class VerifyContactModel
+{
+    /// <summary>渠道。mail/sms</summary>
+    public String Channel { get; set; }
+
+    /// <summary>新邮箱或手机号</summary>
+    public String Account { get; set; }
+
+    /// <summary>验证码（经 SendCode action=bind 发送）</summary>
+    public String Code { get; set; }
+}
+
+/// <summary>OAuth回跳待注册信息</summary>
+public class OAuthPendingInfoModel : ICubeModel
+{
+    /// <summary>提供者名称</summary>
+    public String Provider { get; set; }
+
+    /// <summary>建议用户名</summary>
+    public String Username { get; set; }
+
+    /// <summary>邮箱</summary>
+    public String Email { get; set; }
+
+    /// <summary>手机号</summary>
+    public String Mobile { get; set; }
+
+    /// <summary>头像</summary>
+    public String Avatar { get; set; }
+}
+
+/// <summary>重置密码模型</summary>
+public class ResetPwdModel : ICubeModel
+{
+    /// <summary> 用户名/手机号 </summary>
+    public String Username { get; set; }
+
+    /// <summary> 验证码 </summary>
+    public String Code { get; set; }
+
+    /// <summary> 新密码 </summary>
+    public String NewPassword { get; set; }
+
+    /// <summary> 确认密码 </summary>
+    public String ConfirmPassword { get; set; }
+
+    /// <summary>挑战标识</summary>
+    public String ChallengeId { get; set; }
+}
+
+/// <summary> 用户信息 </summary>
 public class UserInfo
 {
-    /// <summary>
-    /// 编号
-    /// </summary>
+    /// <summary> 编号 </summary>
     public Int32 ID { get; set; }
 
     /// <summary>名称。登录用户名</summary>
@@ -85,11 +239,20 @@ public class UserInfo
     /// <summary>手机</summary>
     public String Mobile { get; set; }
 
+    /// <summary>邮箱已验证。安全中心展示邮箱验证状态</summary>
+    public Boolean MailVerified { get; set; }
+
+    /// <summary>手机已验证。安全中心展示手机验证状态</summary>
+    public Boolean MobileVerified { get; set; }
+
     /// <summary>代码。身份证、员工编号等</summary>
     public String Code { get; set; }
 
     /// <summary>头像</summary>
     public String Avatar { get; set; }
+
+    /// <summary>生日。用户中心编辑资料展示</summary>
+    public DateTime Birthday { get; set; }
 
     /// <summary>角色。主要角色</summary>
     public Int32 RoleID { get; set; }
@@ -164,6 +327,27 @@ public class UserInfo
     /// <summary>备注</summary>
     public String Remark { get; set; }
 
+    /// <summary>是否启用多租户。前端据此控制租户相关 UI 显隐</summary>
+    public Boolean EnableTenant { get; set; }
+
+    /// <summary>当前租户编号。0=管理后台，&gt;0=租户；未开启多租户恒为0</summary>
+    public Int32 TenantId { get; set; }
+
+    /// <summary>当前租户编码。管理后台或未开启多租户为空</summary>
+    public String TenantCode { get; set; }
+
+    /// <summary>当前租户名称。管理后台或未开启多租户为空</summary>
+    public String TenantName { get; set; }
+
+    /// <summary>租户模式。0=未设置，1=管理后台，2=租户</summary>
+    public Int32 TenantMode { get; set; }
+
+    /// <summary>是否系统管理员。可进入管理后台，可切换任意租户</summary>
+    public Boolean IsSystemAdmin { get; set; }
+
+    /// <summary>当前用户所属有效租户列表（租户切换器数据源）</summary>
+    public TenantItem[] Tenants { get; set; }
+
     /// <summary>
     /// 包括角色组的权限集合
     /// </summary>
@@ -218,4 +402,17 @@ public class UserInfo
 
         RoleNames = roles.Select(s => s.Name).Join();
     }
+}
+
+/// <summary>租户切换器选项。返回当前用户可切换的租户</summary>
+public class TenantItem
+{
+    /// <summary>租户编号</summary>
+    public Int32 Id { get; set; }
+
+    /// <summary>租户编码</summary>
+    public String Code { get; set; }
+
+    /// <summary>租户名称</summary>
+    public String Name { get; set; }
 }

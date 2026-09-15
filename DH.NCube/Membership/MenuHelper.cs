@@ -12,6 +12,58 @@ namespace NewLife.Cube.Membership;
 /// </summary>
 public static class MenuHelper
 {
+    /// <summary>判断控制器菜单在指定模式下是否可见。租户模式（isTenant=true）仅放行含Tenant模式的菜单；管理后台仅放行含Admin模式或未声明模式的菜单</summary>
+    /// <param name="controllerType">控制器类型</param>
+    /// <param name="isTenant">是否租户模式（TenantId&gt;0）</param>
+    /// <returns>模式允许访问返回true，否则返回false（需拦截）</returns>
+    public static Boolean CheckVisible(Type controllerType, Boolean isTenant)
+    {
+        var att = controllerType?.GetCustomAttribute<MenuAttribute>();
+        if (att == null) return true;
+
+        // 租户模式：必须声明Tenant模式才可见
+        if (isTenant) return att.Mode.Has(MenuModes.Tenant);
+
+        // 管理后台：含Admin模式，或未声明任何模式（默认仅管理后台可见）才可见
+        return att.Mode.Has(MenuModes.Admin) || !att.Mode.Has(MenuModes.Tenant);
+    }
+
+    /// <summary>判断菜单是否租户相关。用于未开启多租户时隐藏租户菜单（对齐 MVC FixTenantMenu 的 Name 含 Tenant 规则）：
+    /// 1) 菜单名包含 "Tenant"（租户管理/租户成员等）；2) 或控制器仅声明 <see cref="MenuModes.Tenant"/> 模式（无 Admin）。
+    /// 注意：同时声明 Admin|Tenant 的通用菜单（如用户管理）不视为租户菜单，多租户关闭时仍显示</summary>
+    /// <param name="menu">菜单实体</param>
+    /// <returns>租户相关菜单返回true</returns>
+    public static Boolean IsTenantMenu(IMenu menu)
+    {
+        if (menu == null) return false;
+
+        // 菜单名含 Tenant（对齐 MVC FixTenantMenu）
+        if (!menu.Name.IsNullOrEmpty() && menu.Name.Contains("Tenant", StringComparison.OrdinalIgnoreCase)) return true;
+
+        // 控制器仅声明 Tenant 模式（无 Admin）也算租户菜单
+        return IsTenantMenu(menu.FullName);
+    }
+
+    /// <summary>判断控制器全名（FullName）是否租户相关。菜单名由控制器名派生（去 Controller 后缀，见 ScanController），
+    /// 因此：1) 类型名含 "Tenant"；2) 或仅声明 <see cref="MenuModes.Tenant"/> 而无 <see cref="MenuModes.Admin"/></summary>
+    /// <param name="fullName">菜单 FullName，通常为控制器类型全名</param>
+    /// <returns>租户相关返回true</returns>
+    public static Boolean IsTenantMenu(String fullName)
+    {
+        if (fullName.IsNullOrEmpty()) return false;
+
+        var type = fullName.GetTypeEx();
+        if (type == null) return false;
+
+        // 类型名含 Tenant（对应菜单名含 Tenant）
+        if (type.Name.Contains("Tenant", StringComparison.OrdinalIgnoreCase)) return true;
+
+        var att = type.GetCustomAttribute<MenuAttribute>();
+        if (att == null) return false;
+
+        return att.Mode.Has(MenuModes.Tenant) && !att.Mode.Has(MenuModes.Admin);
+    }
+
     /// <summary>扫描命名空间下的控制器并添加为菜单</summary>
     /// <param name="menuFactory">菜单工厂</param>
     /// <param name="rootName">根菜单名称，所有菜单附属在其下</param>
@@ -48,6 +100,19 @@ public static class MenuHelper
                 root.Visible = attArea.Visible;
                 root.Icon = attArea.Icon;
             }
+
+            var dis = areaType.GetDisplayName();
+            var des = areaType.GetDescription();
+
+            if (!dis.IsNullOrEmpty())
+            {
+                root.DisplayName = dis;
+            }
+
+            if (!des.IsNullOrEmpty())
+            {
+                root.Remark = des;
+            }
         }
         if (root.FullName != nameSpace) root.FullName = nameSpace;
         (root as IEntity).Save();
@@ -61,8 +126,9 @@ public static class MenuHelper
         // 遍历该程序集所有类型
         foreach (var type in controllerTypes)
         {
-            var name = type.Name.TrimEnd("Controller");
-            var url = root.Url + "/" + name;
+            var name = type.Name.TrimSuffix("Controller");
+            // 菜单URL统一为前端路由，去掉开头的 /api（WebAPI版实体路由固定 /api 前缀）
+            var url = NewLife.Web.WebHelper.TrimApiPrefix(root.Url + "/" + name);
             var node = root;
 
             // 添加Controller
@@ -96,6 +162,15 @@ public static class MenuHelper
 
             ms.Add(controller);
             list.Add(controller);
+
+            // 注册实体类型到页面的映射，供外键跳转链接使用
+            var entityType = GetEntityType(type);
+            if (entityType != null)
+            {
+                var factory = EntityFactory.CreateFactory(entityType);
+                var pk = factory?.Unique?.Name ?? "ID";
+                EntityPageRegistry.Register(entityType, url, pk);
+            }
 
             // 获取动作
             var acts = ScanActionMenu(type, controller);
@@ -242,7 +317,7 @@ public static class MenuHelper
                 // 添加系统信息菜单
                 var name = method.Name;
                 var m2 = menu.Parent.Childs.FirstOrDefault(_ => _.Name == name);
-                m2 ??= menu.Parent.Add(name, method.GetDisplayName(), $"{controllerType.FullName}.{name}", $"{menu.Url}/{name}");
+                m2 ??= menu.Parent.Add(name, method.GetDisplayName(), $"{controllerType.FullName}.{name}", NewLife.Web.WebHelper.TrimApiPrefix($"{menu.Url}/{name}"));
                 if (m2.Sort == 0) m2.Sort = attMenu.Order;
                 if (m2.Icon.IsNullOrEmpty()) m2.Icon = attMenu.Icon;
                 if (m2.FullName.IsNullOrEmpty()) m2.FullName = $"{controllerType.FullName}.{name}";
@@ -265,5 +340,24 @@ public static class MenuHelper
         }
 
         return dic;
+    }
+
+    /// <summary>从控制器类型的继承链中提取 ReadOnlyEntityController&lt;TEntity&gt; 的泛型实参</summary>
+    /// <param name="controllerType">控制器类型</param>
+    /// <returns>实体类型，非实体控制器返回 null</returns>
+    private static Type GetEntityType(Type controllerType)
+    {
+        var t = controllerType;
+        while (t != null && t != typeof(Object))
+        {
+            if (t.IsGenericType)
+            {
+                var name = t.GetGenericTypeDefinition().Name;
+                if (name.StartsWith("ReadOnlyEntityController`") || name.StartsWith("EntityController`"))
+                    return t.GetGenericArguments()[0];
+            }
+            t = t.BaseType;
+        }
+        return null;
     }
 }

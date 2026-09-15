@@ -5,12 +5,11 @@ using System.Reflection;
 using System.Text;
 using System.Web;
 using System.Xml.Serialization;
-
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-
 using NewLife.Common;
+using NewLife.Cube.AI;
 using NewLife.Cube.Charts;
 using NewLife.Cube.Entity;
 using NewLife.Cube.Extensions;
@@ -23,7 +22,6 @@ using NewLife.Security;
 using NewLife.Serialization;
 using NewLife.Web;
 using NewLife.Xml;
-
 using XCode;
 using XCode.Configuration;
 using XCode.Membership;
@@ -32,7 +30,7 @@ namespace NewLife.Cube;
 
 /// <summary>只读实体控制器基类</summary>
 /// <typeparam name="TEntity"></typeparam>
-public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where TEntity : Entity<TEntity>, new()
+public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX, IEntityAiContext where TEntity : Entity<TEntity>, new()
 {
     #region 构造
     /// <summary>动作执行前</summary>
@@ -116,17 +114,21 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     /// <returns></returns>
     protected virtual ActionResult IndexView(Pager p)
     {
-        // 需要总记录数来分页
-        p.RetrieveTotalCount = true;
+        // 需要总记录数来分页；海量数据可关闭，免查总数后仅提供上一页/下一页
+        var needCount = PageSetting.EnableTotalCount;
+        if (needCount)
+            p.RetrieveTotalCount = true;
 
-        var list = SearchData(p);
+        // 免查总数模式：多取一条探测是否存在下一页
+        var list = SearchData(p, needCount, out var hasNext);
 
         // 用于显示的列
         ViewBag.Fields = OnGetFields(ViewKinds.List, list);
         ViewBag.SearchFields = OnGetFields(ViewKinds.Search, list);
+        ViewBag.HasNext = hasNext;
 
         // Json输出
-        if (IsJsonRequest) return Json(0, null, list, new { page = p });
+        if (IsJsonRequest) return Json(0, null, list, new { page = p, hasNext });
 
         return View("List", list);
     }
@@ -200,10 +202,10 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         {
             var issuer = ValidToken(token);
 
-            // 需要总记录数来分页
-            p.RetrieveTotalCount = true;
-
-            var list = SearchData(p);
+            // 需要总记录数来分页；海量数据可关闭，免查总数后仅提供上一页/下一页
+            var needCount = PageSetting.EnableTotalCount;
+            var list = SearchData(p, needCount, out var hasNext);
+            ViewBag.HasNext = hasNext;
 
             return View("List", list);
         }
@@ -225,13 +227,12 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         {
             var issuer = ValidToken(token);
 
-            // 需要总记录数来分页
-            p.RetrieveTotalCount = true;
-
-            var list = SearchData(p);
+            // 需要总记录数来分页；海量数据可关闭，免查总数后仅提供上一页/下一页
+            var needCount = PageSetting.EnableTotalCount;
+            var list = SearchData(p, needCount, out var hasNext);
 
             // Json输出
-            return Json(0, null, list, new { issuer, page = p });
+            return Json(0, null, list, new { issuer, page = p, hasNext });
         }
         catch (Exception ex)
         {
@@ -257,6 +258,8 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         else
         {
             var ut = UserToken.Valid(token, UserHost);
+            // 防御：Valid 内部已校验，此处再兜底避免空引用
+            if (ut == null || ut.User == null) throw new XException("令牌无效或已过期！");
             var user = ut.User;
 
             // 定位菜单页面
@@ -270,7 +273,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             {
                 var url = ut.Url;
                 if (url.Contains("?")) url = url.Substring(null, "?");
-                if (!url.StartsWithIgnoreCase(menu.Url.TrimStart("~"))) throw new Exception($"该令牌[{user}]无权访问[{menu}]，仅限于[{url}]");
+                if (!url.StartsWithIgnoreCase(menu.Url.TrimPrefix("~"))) throw new Exception($"该令牌[{user}]无权访问[{menu}]，仅限于[{url}]");
             }
 
             // 设置当前用户，用于数据权限控制
@@ -378,33 +381,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             var list = SearchData(p);
 
             // 准备需要输出的列
-            var fs = new List<FieldItem>();
-            foreach (var fi in Factory.AllFields)
-            {
-                if (Type.GetTypeCode(fi.Type) == TypeCode.Object) continue;
-                if (!fi.IsDataObjectField)
-                {
-                    var pi = Factory.EntityType.GetProperty(fi.Name);
-                    if (pi != null && pi.GetCustomAttribute<XmlIgnoreAttribute>() != null) continue;
-                }
-
-                fs.Add(fi);
-            }
-
-            // 基本属性与扩展属性对调顺序
-            for (var i = 0; i < fs.Count; i++)
-            {
-                var fi = fs[i];
-                if (fi.OriField != null)
-                {
-                    var k = fs.IndexOf(fi.OriField);
-                    if (k >= 0)
-                    {
-                        fs[i] = fs[k];
-                        fs[k] = fi;
-                    }
-                }
-            }
+            var fs = GetExportFields();
 
             return new ExcelResult { Fields = GetFields(fs, list), Data = list, HttpContext = HttpContext };
         }
@@ -440,6 +417,53 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     /// <returns></returns>
     protected virtual Object OnExportXml() => ExportData();
 
+    /// <summary>准备导出列：过滤 Object/XmlIgnore 类型，基本属性与扩展属性对调顺序</summary>
+    /// <param name="forTemplate">是否导出模板。true 时隐藏审计/启用等模板无用字段且要求有描述</param>
+    /// <returns>导出列集合</returns>
+    private IList<FieldItem> GetExportFields(Boolean forTemplate = false)
+    {
+        // 准备需要输出的列
+        var fs = new List<FieldItem>();
+        foreach (var fi in Factory.AllFields)
+        {
+            if (Type.GetTypeCode(fi.Type) == TypeCode.Object) continue;
+            if (!fi.IsDataObjectField)
+            {
+                var pi = Factory.EntityType.GetProperty(fi.Name);
+                if (pi != null && pi.GetCustomAttribute<XmlIgnoreAttribute>() != null) continue;
+            }
+
+            // 模板隐藏审计等字段，且要求有描述
+            if (forTemplate)
+            {
+                if (fi.Name.EqualIgnoreCase("CreateUserID", "CreateUser", "CreateTime", "CreateIP",
+                            "UpdateUserID", "UpdateUser", "UpdateTime", "UpdateIP", "Enable") || fi.Description.IsNullOrEmpty())
+                {
+                    continue;
+                }
+            }
+
+            fs.Add(fi);
+        }
+
+        // 基本属性与扩展属性对调顺序
+        for (var i = 0; i < fs.Count; i++)
+        {
+            var fi = fs[i];
+            if (fi.OriField != null)
+            {
+                var k = fs.IndexOf(fi.OriField);
+                if (k >= 0)
+                {
+                    fs[i] = fs[k];
+                    fs[k] = fi;
+                }
+            }
+        }
+
+        return fs;
+    }
+
     /// <summary>设置附件响应方式</summary>
     /// <param name="name"></param>
     /// <param name="ext"></param>
@@ -449,7 +473,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         name = GetAttachment(name, ext, includeTime);
         name = HttpUtility.UrlEncode(name, Encoding.UTF8);
 
-        Response.Headers.Add("Content-Disposition", "Attachment;filename=" + name);
+        Response.Headers["Content-Disposition"] = "Attachment;filename=" + name;
     }
 
     /// <summary>获取附件响应方式</summary>
@@ -461,7 +485,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
         if (name.IsNullOrEmpty()) name = GetType().GetDisplayName();
         if (name.IsNullOrEmpty()) name = Factory.EntityType.GetDisplayName();
         if (name.IsNullOrEmpty()) name = Factory.Table.DataTable.DisplayName;
-        if (name.IsNullOrEmpty()) name = GetType().Name.TrimEnd("Controller");
+        if (name.IsNullOrEmpty()) name = GetType().Name.TrimSuffix("Controller");
         if (!ext.IsNullOrEmpty()) ext = ext.EnsureStart(".");
 
         if (includeTime) name += $"_{DateTime.Now:yyyyMMddHHmmss}";
@@ -495,33 +519,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     public virtual IActionResult ExportExcel()
     {
         // 准备需要输出的列
-        var fs = new List<FieldItem>();
-        foreach (var fi in Factory.AllFields)
-        {
-            if (Type.GetTypeCode(fi.Type) == TypeCode.Object) continue;
-            if (!fi.IsDataObjectField)
-            {
-                var pi = Factory.EntityType.GetProperty(fi.Name);
-                if (pi != null && pi.GetCustomAttribute<XmlIgnoreAttribute>() != null) continue;
-            }
-
-            fs.Add(fi);
-        }
-
-        // 基本属性与扩展属性对调顺序
-        for (var i = 0; i < fs.Count; i++)
-        {
-            var fi = fs[i];
-            if (fi.OriField != null)
-            {
-                var k = fs.IndexOf(fi.OriField);
-                if (k >= 0)
-                {
-                    fs[i] = fs[k];
-                    fs[k] = fi;
-                }
-            }
-        }
+        var fs = GetExportFields();
 
         var name = GetAttachment(null, ".xlsx", true);
 
@@ -536,41 +534,8 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     [DisplayName("导出模板")]
     public virtual IActionResult ExportExcelTemplate()
     {
-        // 准备需要输出的列
-        var fs = new List<FieldItem>();
-        foreach (var fi in Factory.AllFields)
-        {
-            if (Type.GetTypeCode(fi.Type) == TypeCode.Object) continue;
-            if (!fi.IsDataObjectField)
-            {
-                var pi = Factory.EntityType.GetProperty(fi.Name);
-                if (pi != null && pi.GetCustomAttribute<XmlIgnoreAttribute>() != null) continue;
-            }
-
-            //模板隐藏这几个字段
-            if (fi.Name.EqualIgnoreCase("CreateUserID", "CreateUser", "CreateTime", "CreateIP",
-                        "UpdateUserID", "UpdateUser", "UpdateTime", "UpdateIP", "Enable") || fi.Description.IsNullOrEmpty())
-            {
-                continue;
-            }
-
-            fs.Add(fi);
-        }
-
-        // 基本属性与扩展属性对调顺序
-        for (var i = 0; i < fs.Count; i++)
-        {
-            var fi = fs[i];
-            if (fi.OriField != null)
-            {
-                var k = fs.IndexOf(fi.OriField);
-                if (k >= 0)
-                {
-                    fs[i] = fs[k];
-                    fs[k] = fi;
-                }
-            }
-        }
+        // 准备需要输出的列（模板：隐藏审计/启用字段且要求有描述）
+        var fs = GetExportFields(true);
 
         var name = GetAttachment(null, ".xlsx", true);
 
@@ -585,7 +550,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     [DisplayName("导出Csv")]
     public virtual IActionResult ExportCsv()
     {
-        var name = GetType().Name.TrimEnd("Controller");
+        var name = GetType().Name.TrimSuffix("Controller");
         name = GetAttachment(name, ".csv", true);
 
         var list = ExportData();
@@ -620,7 +585,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     [DisplayName("导出Zip")]
     public virtual IActionResult ExportZip()
     {
-        var name = GetType().Name.TrimEnd("Controller");
+        var name = GetType().Name.TrimSuffix("Controller");
         var fileName = GetAttachment(name, ".zip", true);
 
         var list = ExportData();
@@ -690,7 +655,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
 
             var dal = fact.Session.Dal;
 
-            var name = GetType().Name.TrimEnd("Controller");
+            var name = GetType().Name.TrimSuffix("Controller");
             var fileName = $"{name}_{DateTime.Now:yyyyMMddHHmmss}.gz";
             var bak = NewLife.Setting.Current.BackupPath.CombinePath(fileName).GetBasePath();
             bak.EnsureDirectory(true);
@@ -749,7 +714,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
 
         var dal = fact.Session.Dal;
 
-        var name = GetType().Name.TrimEnd("Controller");
+        var name = GetType().Name.TrimSuffix("Controller");
         SetAttachment(name, ".gz", true);
 
         // 允许同步IO，便于刷数据Flush
@@ -790,7 +755,7 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
             var fact = Factory;
             var dal = fact.Session.Dal;
 
-            var name = GetType().Name.TrimEnd("Controller");
+            var name = GetType().Name.TrimSuffix("Controller");
             var fileName = $"{name}_*.gz";
 
             var di = NewLife.Setting.Current.BackupPath.GetBasePath().AsDirectory();
@@ -994,6 +959,47 @@ public partial class ReadOnlyEntityController<TEntity> : ControllerBaseX where T
     #endregion
 
     #region 列表字段和表单字段
+    /// <summary>获取页面元数据。包含页面设置以及列表/表单/搜索字段</summary>
+    /// <returns></returns>
+    [AllowAnonymous]
+    public virtual ActionResult GetPage()
+    {
+        var setting = new
+        {
+            PageSetting.NavView,
+            PageSetting.EnableNavbar,
+            PageSetting.EnableToolbar,
+            PageSetting.EnableAdd,
+            PageSetting.EnableKey,
+            PageSetting.EnableSelect,
+            PageSetting.EnableFooter,
+            PageSetting.IsReadOnly,
+            PageSetting.EnableTableDoubleClick,
+            PageSetting.OrderByKey,
+            PageSetting.DoubleDelete,
+        };
+
+        var list = OnGetFields(ViewKinds.List, null);
+        var addForm = OnGetFields(ViewKinds.AddForm, null);
+        var editForm = OnGetFields(ViewKinds.EditForm, null);
+        var detail = OnGetFields(ViewKinds.Detail, null);
+        var search = OnGetFields(ViewKinds.Search, null);
+
+        var data = new
+        {
+            setting,
+            list,
+            addForm,
+            editForm,
+            detail,
+            search,
+        };
+
+        Object rs = new { code = 0, message = "", data };
+
+        return new JsonResult(rs);
+    }
+
     /// <summary>获取字段信息。支持用户重载并根据上下文定制界面</summary>
     /// <param name="kind">字段类型：1-列表List、2-详情Detail、3-添加AddForm、4-编辑EditForm、5-搜索Search</param>
     /// <returns></returns>

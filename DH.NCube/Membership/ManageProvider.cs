@@ -89,7 +89,7 @@ public class ManageProvider2 : ManageProvider
         IManageUser user = null;
 
         // OAuth密码模式登录
-        var oauths = OAuthConfig.GetValids(GrantTypes.Password);
+        var oauths = OAuthConfig.GetValids(TenantContext.CurrentId, GrantTypes.Password);
         if (oauths.Count > 0)
             user = LoginByOAuth(oauths[0], name, password);
         else
@@ -111,8 +111,16 @@ public class ManageProvider2 : ManageProvider
                 expire = TimeSpan.FromSeconds(set.SessionTimeout);
         }
 
-        // 保存Cookie
         var context = Context?.HttpContext;
+        if (context != null && user != null)
+        {
+            // 先颁发令牌（含 UserToken + JWT(jti)），JWT 缓存在 context.Items
+            // 记住登录状态（Remember）：JWT 有效期与 Cookie 一致延长到 365 天，前端重开系统免登录
+            var tokenExpire = remember ? TimeSpan.FromDays(365) : TimeSpan.FromSeconds(set.TokenExpire);
+            context.IssueLoginToken(user, tokenExpire);
+        }
+
+        // 保存Cookie（优先取 Items 中带 jti 的 JWT）
         this.SaveCookie(user, expire, context);
 
         return user;
@@ -222,10 +230,28 @@ public class ManageProvider2 : ManageProvider
     /// <summary>注销</summary>
     public override void Logout()
     {
-        if (Current is User user) UserService.ClearOnline(user);
+        var context = Context?.HttpContext;
+        if (Current is User user)
+        {
+            UserService.ClearOnline(user);
+
+            // 根据多设备配置决定吊销范围
+            var set = CubeSetting.Current;
+            if (set.EnableMultiDeviceLogin)
+            {
+                // 多设备模式：从请求 JWT 的 jti 精确定位当前令牌，不牵连其他设备
+                var tokenId = context?.GetJti() ?? 0;
+                if (tokenId > 0)
+                    UserToken.RevokeByTokenId(tokenId);
+            }
+            else
+            {
+                // 单设备模式：吊销该用户全部令牌
+                UserToken.RevokeByUser(user.ID);
+            }
+        }
 
         // 注销时销毁所有Session
-        var context = Context?.HttpContext;
         var session = context.Items["Session"] as IDictionary<String, Object>;
         session?.Clear();
 

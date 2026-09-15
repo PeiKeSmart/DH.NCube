@@ -5,6 +5,7 @@ using NewLife.Log;
 using NewLife.Security;
 using NewLife.Serialization;
 using XCode;
+using XCode.Membership;
 
 namespace NewLife.Cube.Entity;
 
@@ -33,7 +34,7 @@ public enum GrantTypes
 }
 
 /// <summary>OAuth配置。需要连接的OAuth认证方</summary>
-public partial class OAuthConfig : Entity<OAuthConfig>
+public partial class OAuthConfig : Entity<OAuthConfig>, ITenantScope
 {
     #region 对象操作
     static OAuthConfig()
@@ -42,10 +43,10 @@ public partial class OAuthConfig : Entity<OAuthConfig>
         //var df = Meta.Factory.AdditionalFields;
         //df.Add(nameof(CreateUserID));
 
-        // 过滤器 UserModule、TimeModule、IPModule
-        Meta.Modules.Add<UserModule>();
-        Meta.Modules.Add<TimeModule>();
-        Meta.Modules.Add<IPModule>();
+        // 过滤器 UserInterceptor、TimeInterceptor、IPInterceptor
+        Meta.Interceptors.Add<UserInterceptor>();
+        Meta.Interceptors.Add<TimeInterceptor>();
+        Meta.Interceptors.Add<IPInterceptor>();
 
         // 单对象缓存
         var sc = Meta.SingleCache;
@@ -113,7 +114,7 @@ public partial class OAuthConfig : Entity<OAuthConfig>
         Add("Ding", "钉钉", "/Content/images/logo/Ding.png", "snsapi_qrlogin扫码登录，snsapi_auth钉钉内免登，snsapi_login密码登录");
         Add("QyWeiXin", "企业微信", "/Content/images/logo/QyWeiXin.png");
         //Add("Weixin", "微信公众号", "/Content/images/logo/Weixin.png", "snsapi_base静默登录，snsapi_userinfo需要用户关注后授权");
-        var cfg = new OAuthConfig
+        new OAuthConfig
         {
             Name = "Weixin",
             NickName = "微信公众号",
@@ -123,15 +124,35 @@ public partial class OAuthConfig : Entity<OAuthConfig>
             Visible = false,
             AutoRegister = true,
             FetchAvatar = true,
-        };
-        cfg.Insert();
+        }.Insert();
 
         Add("OpenWeixin", "微信开放平台", "/Content/images/logo/Weixin.png", "snsapi_login用于扫码登录");
         Add("Microsoft", "微软", "/Content/images/logo/Microsoft.png");
         //Add("Weibo", "微博", "/Content/images/logo/Weibo.png");
         //Add("Taobao", "淘宝", "/Content/images/logo/Taobao.png");
         //Add("Alipay", "支付宝", "/Content/images/logo/Alipay.png");
+        new OAuthConfig
+        {
+            Name = "WxApp",
+            NickName = "微信移动应用APP登录",
+            Logo = "/Content/images/logo/Weixin.png",
+            Remark = "用于移动应用调用微信APP登陆",
 
+            Visible = false,
+            AutoRegister = true,
+            FetchAvatar = true,
+        }.Insert();
+        new OAuthConfig
+        {
+            Name = "WxOpen",
+            NickName = "微信小程序",
+            Logo = "/Content/images/logo/Weixin.png",
+            Remark = "用于微信小程序登录",
+
+            Visible = false,
+            AutoRegister = true,
+            FetchAvatar = true,
+        }.Insert();
         if (XTrace.Debug) XTrace.WriteLine("完成初始化OAuthConfig[OAuth配置]数据！");
     }
 
@@ -172,6 +193,20 @@ public partial class OAuthConfig : Entity<OAuthConfig>
         //return Meta.SingleCache.GetItemWithSlaveKey(name) as OAuthConfig;
 
         return Find(_.Name == name);
+    }
+
+    /// <summary>根据AppId查找。仅返回启用且未删除的配置，防止禁用/软删除配置继续生效</summary>
+    /// <param name="appid">AppId</param>
+    /// <returns>实体对象</returns>
+    public static OAuthConfig FindByAppId(String appid)
+    {
+        // 实体缓存
+        if (Meta.Session.Count < 1000) return Meta.Cache.Find(e => e.AppId.EqualIgnoreCase(appid) && e.Enable && !e.IsDeleted);
+
+        // 单对象缓存
+        //return Meta.SingleCache.GetItemWithSlaveKey(name) as OAuthConfig;
+
+        return Find(_.AppId == appid & _.Enable == true & _.IsDeleted == false);
     }
     #endregion
 
@@ -221,16 +256,19 @@ public partial class OAuthConfig : Entity<OAuthConfig>
     }
 
     /// <summary>获取全部有效设置</summary>
+    /// <param name="tenantId">租户编号</param>
     /// <returns></returns>
-    public static IList<OAuthConfig> GetValids() => FindAllWithCache().Where(e => e.Enable && !e.IsDeleted).OrderByDescending(e => e.Sort).ThenByDescending(e => e.ID).ToList();
+    public static IList<OAuthConfig> GetValids(Int32 tenantId) => FindAllWithCache().Where(e => e.Enable && !e.IsDeleted && e.TenantId == tenantId).OrderByDescending(e => e.Sort).ThenByDescending(e => e.ID).ToList();
 
     /// <summary>获取指定授权类型有效设置</summary>
+    /// <param name="tenantId">租户编号</param>
     /// <param name="grantType">授权类型</param>
     /// <returns></returns>
-    public static IList<OAuthConfig> GetValids(GrantTypes grantType) => FindAllWithCache().Where(e => e.Enable && !e.IsDeleted && e.GrantType == grantType).OrderByDescending(e => e.Sort).ThenByDescending(e => e.ID).ToList();
+    public static IList<OAuthConfig> GetValids(Int32 tenantId, GrantTypes grantType) => FindAllWithCache().Where(e => e.Enable && !e.IsDeleted && e.TenantId == tenantId && e.GrantType == grantType).OrderByDescending(e => e.Sort).ThenByDescending(e => e.ID).ToList();
 
     /// <summary>获取全部有效且可见设置</summary>
+    /// <param name="tenantId">租户编号</param>
     /// <returns></returns>
-    public static IList<OAuthConfig> GetVisibles() => FindAllWithCache().Where(e => e.Enable && !e.IsDeleted && e.Visible).OrderByDescending(e => e.Sort).ThenByDescending(e => e.ID).ToList();
+    public static IList<OAuthConfig> GetVisibles(Int32 tenantId) => FindAllWithCache().Where(e => e.Enable && !e.IsDeleted && e.Visible && e.TenantId == tenantId).OrderByDescending(e => e.Sort).ThenByDescending(e => e.ID).ToList();
     #endregion
 }

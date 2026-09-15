@@ -24,10 +24,10 @@ namespace NewLife.Cube.Entity
             //var df = Meta.Factory.AdditionalFields;
             //df.Add(nameof(CreateUserId));
 
-            // 过滤器 UserModule、TimeModule、IPModule
-            Meta.Modules.Add<UserModule>();
-            Meta.Modules.Add<TimeModule>();
-            Meta.Modules.Add<IPModule>();
+            // 过滤器 UserInterceptor、TimeInterceptor、IPInterceptor
+            Meta.Interceptors.Add<UserInterceptor>();
+            Meta.Interceptors.Add<TimeInterceptor>();
+            Meta.Interceptors.Add<IPInterceptor>();
         }
 
         /// <summary>验证并修补数据，通过抛出异常的方式提示验证失败。</summary>
@@ -170,7 +170,7 @@ namespace NewLife.Cube.Entity
         /// <param name="areaName"></param>
         /// <param name="menu"></param>
         /// <param name="factory"></param>
-        public static ModelTable ScanModel(String areaName, IMenu menu, IEntityFactory factory) => ScanModel(areaName, menu.Name, menu.FullName, menu.Url.TrimStart("~"), factory);
+        public static ModelTable ScanModel(String areaName, IMenu menu, IEntityFactory factory) => ScanModel(areaName, menu.Name, menu.FullName, menu.Url.TrimPrefix("~"), factory);
 
         /// <summary> 
         /// 根据菜单和实体工厂创建模型表和模型列
@@ -186,7 +186,7 @@ namespace NewLife.Cube.Entity
 
             //var entityTypeName = menu.Name; // 菜单名从控制器名称里面取
             //var ctrlFullName = menu.FullName;
-            //var url = menu.Url.TrimStart("~");
+            //var url = menu.Url.TrimPrefix("~");
 
 
             //if (areaName.IsNullOrWhiteSpace()) areaName = menu.Parent.Name;

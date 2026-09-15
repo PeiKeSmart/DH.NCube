@@ -1,0 +1,487 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useMenuStore, type TreeMenuItem } from '@newlifex/cube-vue/core/stores/menu';
+import { getConfig } from '@newlifex/cube-vue/core/configure';
+import { openMenuTab } from '@newlifex/cube-vue/core/utils/menuTab';
+import ThemeSwitcher from '@newlifex/cube-vue/core/components/ThemeSwitcher.vue';
+import LayoutSwitcher from '@newlifex/cube-vue/core/components/LayoutSwitcher.vue';
+import ModeSwitcher from '@newlifex/cube-vue/core/components/ModeSwitcher.vue';
+import NotificationBell from '@newlifex/cube-vue/core/components/NotificationBell.vue';
+import SearchBar from '@newlifex/cube-vue/core/components/SearchBar.vue';
+import UserProfile from '@newlifex/cube-vue/core/components/UserProfile.vue';
+
+const menuStore = useMenuStore();
+const { treeMenus, topLevelActiveMenu } = storeToRefs(menuStore);
+
+const config = getConfig();
+const title = config.base.title;
+const logo = computed(() => config.base.logo);
+const openMenuId = ref<string | null>(null);
+
+const isMenuActive = (menu: TreeMenuItem) => topLevelActiveMenu.value?.id === menu.id;
+const hasChildren = (menu: TreeMenuItem) =>
+  Array.isArray(menu.children) && menu.children.length > 0;
+
+const closeMenu = () => {
+  openMenuId.value = null;
+};
+
+const handleNavItemClick = (menu: TreeMenuItem) => {
+  if (!hasChildren(menu)) {
+    openMenuTab({ url: menu.path, title: menu.name });
+    menuStore.setActiveMenu(menu);
+    closeMenu();
+  } else {
+    openMenuId.value = openMenuId.value === menu.id ? null : menu.id;
+  }
+};
+
+const handleSubItemClick = (menu: TreeMenuItem) => {
+  openMenuTab({ url: menu.path, title: menu.name });
+  menuStore.setActiveMenu(menu);
+  closeMenu();
+};
+
+const handleMouseEnter = (menu: TreeMenuItem) => {
+  if (hasChildren(menu)) {
+    openMenuId.value = menu.id;
+  }
+};
+
+const handleMouseLeave = () => {
+  openMenuId.value = null;
+};
+
+const handleMegaMouseEnter = () => {
+  // 保持在菜单展开状态
+};
+
+const handleMegaMouseLeave = () => {
+  openMenuId.value = null;
+};
+</script>
+
+<template>
+  <header class="topnav">
+    <!-- Logo -->
+    <div class="tn-logo">
+      <div class="tn-mark">
+        <img v-if="logo" :src="logo" :alt="title" class="tn-logo-img" />
+        <svg v-else viewBox="0 0 17 17" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M2 1C1.45 1 1 1.45 1 2v5h3V4h3V1H2zm6 0v3h3v3h3V2c0-.55-.45-1-1-1H8zM1 8v6c0 .55.45 1 1 1h6v-3H5V8H1zm11 3v3H9v3h5c.55 0 1-.45 1-1v-5h-3z"
+          />
+        </svg>
+      </div>
+      <div class="tn-name">{{ title }}</div>
+    </div>
+
+    <!-- 导航菜单 -->
+    <nav class="tn-nav">
+      <div
+        v-for="menu in treeMenus"
+        :key="menu.id"
+        class="tn-item"
+        :class="{ open: openMenuId === menu.id }"
+        @mouseenter="handleMouseEnter(menu)"
+        @mouseleave="handleMouseLeave"
+      >
+        <!-- 导航链接包装器 -->
+        <div class="tn-link-wrap">
+          <span
+            class="tn-link"
+            :class="{ active: isMenuActive(menu) && openMenuId !== menu.id }"
+            @click="handleNavItemClick(menu)"
+          >
+            {{ menu.title || menu.name }}
+            <svg
+              v-if="hasChildren(menu)"
+              class="chv"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+
+          <!-- 悬浮桥梁 - 连接导航和下拉菜单 -->
+          <div
+            v-if="hasChildren(menu) && openMenuId === menu.id"
+            class="mega-bridge"
+            @mouseenter="handleMegaMouseEnter"
+            @mouseleave="handleMegaMouseLeave"
+          ></div>
+
+          <!-- 巨型下拉菜单 -->
+          <div
+            v-show="hasChildren(menu) && openMenuId === menu.id"
+            class="mega"
+            @mouseenter="handleMegaMouseEnter"
+            @mouseleave="handleMegaMouseLeave"
+          >
+            <div class="mega-cols">
+              <template v-for="(col, colIdx) in menu.children" :key="col.id">
+                <div v-if="colIdx > 0" class="mega-col-sep"></div>
+                <div class="mega-col">
+                  <div class="mc-title">{{ col.title || col.name }}</div>
+                  <template v-if="col.children && col.children.length > 0">
+                    <div
+                      v-for="item in col.children"
+                      :key="item.id"
+                      class="mc-item"
+                      @click="handleSubItemClick(item)"
+                    >
+                      {{ item.title || item.name }}
+                    </div>
+                  </template>
+                  <div v-else class="mc-item" @click="handleSubItemClick(col)">
+                    {{ col.title || col.name }}
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- 右侧操作区 -->
+    <div class="tn-acts">
+      <!-- 搜索按钮 -->
+      <SearchBar mode="icon" />
+
+      <div class="tn-dvd"></div>
+
+      <!-- 模式切换（太阳/月亮） -->
+      <ModeSwitcher />
+
+      <!-- 主题选择器（调色盘） -->
+      <ThemeSwitcher />
+
+      <!-- 布局切换 -->
+      <LayoutSwitcher />
+
+      <NotificationBell />
+      <UserProfile variant="navbar" />
+    </div>
+  </header>
+
+  <!-- 遮罩层 -->
+  <div v-if="openMenuId" class="mega-overlay" @click="closeMenu"></div>
+</template>
+
+<style lang="scss" scoped>
+$tn-h: 60px;
+
+.topnav {
+  --navbar-border: var(--cube-layout-nav-border-color, var(--el-border-color));
+  --navbar-text: var(--cube-layout-breadcrumb-item-color, var(--el-text-color-regular));
+  --navbar-text-hover: var(--el-color-primary);
+  --navbar-text-muted: var(--el-text-color-disabled);
+  --navbar-hover-bg: var(--el-color-primary-light-9);
+  --navbar-surface-soft: color-mix(in srgb, var(--el-bg-color-overlay) 92%, transparent);
+  --navbar-surface-strong: color-mix(in srgb, var(--el-bg-color-overlay) 84%, transparent);
+  --navbar-overlay: color-mix(in srgb, var(--el-text-color-primary) 6%, transparent);
+  --navbar-shadow: 0 2px 20px color-mix(in srgb, var(--el-text-color-primary) 14%, transparent);
+  --navbar-mega-shadow: 0 10px 40px color-mix(in srgb, var(--el-text-color-primary) 12%, transparent);
+  --navbar-danger-soft: color-mix(in srgb, var(--el-color-danger) 14%, transparent);
+
+  height: $tn-h;
+  background: var(--cube-layout-nav-bg, var(--el-bg-color-overlay));
+  display: flex;
+  align-items: center;
+  padding: 0 18px 0 14px;
+  position: relative;
+  z-index: 100;
+  box-shadow: var(--navbar-shadow);
+}
+
+// Logo
+.tn-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 18px;
+  border-right: 1px solid var(--cube-layout-nav-border-color, var(--el-border-color));
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.tn-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  svg {
+    width: 17px;
+    height: 17px;
+    fill: var(--cube-layout-nav-bg, var(--el-bg-color-overlay));
+  }
+}
+
+.tn-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+}
+
+.tn-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+// 导航菜单
+.tn-nav {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tn-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+
+  &:hover {
+    .tn-link {
+      color: var(--navbar-text-hover);
+      background: var(--navbar-hover-bg);
+    }
+  }
+
+  &.open {
+    .tn-link {
+      color: var(--navbar-text-hover);
+      background: var(--navbar-surface-soft);
+    }
+  }
+}
+
+.tn-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 13px;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+  color: var(--navbar-text);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition:
+    color 0.15s,
+    background 0.15s;
+
+  &:hover {
+    color: var(--navbar-text-hover);
+    background: var(--navbar-hover-bg);
+  }
+
+  &.active {
+    color: var(--navbar-text-hover);
+    border-bottom-color: var(--el-color-primary);
+  }
+}
+
+.tn-item.open .tn-link {
+  color: var(--navbar-text-hover);
+  background: var(--navbar-surface-soft);
+}
+
+.chv {
+  transition: transform 0.2s;
+  opacity: 0.6;
+}
+
+.tn-item.open .chv {
+  transform: rotate(180deg);
+}
+
+// 巨型下拉菜单
+.mega {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: $tn-h;
+  background: var(--el-bg-color-overlay);
+  border-top: 2px solid var(--el-color-primary);
+  box-shadow: var(--navbar-mega-shadow);
+  padding: 22px 28px 24px;
+  display: flex;
+  z-index: 200;
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.tn-item.open .mega,
+.tn-item:hover .mega {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+// 导航链接包装器
+.tn-link-wrap {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+// 悬浮桥梁 - 连接导航和下拉菜单
+.mega-bridge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 20px;
+  background: transparent;
+  z-index: 199;
+  pointer-events: auto;
+}
+
+.mega-cols {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 1;
+  gap: 0;
+}
+
+.mega-col {
+  min-width: 150px;
+  padding: 0 24px 0 0;
+  margin: 0 0 14px;
+
+  &:first-child {
+    padding-left: 0;
+  }
+}
+
+.mega-col-sep {
+  width: 1px;
+  background: var(--el-border-color-light);
+  margin: 0 10px 14px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.mc-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 9px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.mc-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+  white-space: nowrap;
+
+  &::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--el-border-color-light);
+    flex-shrink: 0;
+    transition: background 0.12s;
+  }
+
+  &:hover {
+    background: var(--el-color-primary-light-9);
+    color: var(--el-color-primary);
+
+    &::before {
+      background: var(--el-color-primary);
+    }
+  }
+}
+
+// 遮罩
+.mega-overlay {
+  position: fixed;
+  inset: 0;
+  top: $tn-h;
+  background: var(--navbar-overlay);
+  z-index: 150;
+  pointer-events: none;
+}
+
+// 右侧操作区
+.tn-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tn-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: none;
+  background: var(--navbar-surface-soft);
+  color: var(--navbar-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s,
+    color 0.15s;
+
+  &:hover {
+    background: var(--navbar-surface-strong);
+    color: var(--navbar-text-hover);
+  }
+}
+
+.tn-logout:hover {
+  background: var(--navbar-danger-soft) !important;
+  color: var(--el-color-danger) !important;
+}
+
+.tn-dvd {
+  width: 1px;
+  height: 20px;
+  background: var(--cube-layout-nav-border-color, var(--el-border-color));
+  margin: 0 3px;
+}
+</style>

@@ -10,8 +10,8 @@ using NewLife.Cube.Extensions;
 using NewLife.Cube.LayuiAdmin;
 using NewLife.Cube.Metronic;
 using NewLife.Cube.Metronic8;
+using NewLife.Cube.Services;
 using NewLife.Cube.Tabler;
-using NewLife.Cube.WebMiddleware;
 using NewLife.Log;
 using NewLife.Redis.Extensions;
 using CubeSetting = NewLife.Cube.CubeSetting;
@@ -28,7 +28,7 @@ public class Startup
     {
         // 引入星尘，设置监控中间件
         var star = services.AddStardust(null);
-        TracerMiddleware.Tracer = star?.Tracer;
+        //TracerMiddleware.Tracer = star?.Tracer;
 
         // 分布式服务，使用配置中心RedisCache配置
         services.AddSingleton<ICacheProvider, RedisCacheProvider>();
@@ -42,6 +42,11 @@ public class Startup
             redis.Init(cacheConn);
             services.AddSingleton(redis);
         }
+
+        services.AddCubeFileStorage("Cube");
+
+        // 账号注销处理器示例：演示下游注册数据清理处理器（AddCube 前后注册均可）
+        services.AddSingleton<IAccountCloseHandler, DemoAccountCloseHandler>();
 
         // 启用接口响应压缩
         services.AddResponseCompression();

@@ -1,0 +1,113 @@
+@model ItemModel
+@using NewLife;
+@using NewLife.Cube
+@using XCode;
+@using XCode.Configuration;
+@{
+    var name = Model.Name;
+    var value = Model.Value + "";
+    var editorId = "md_" + name;
+
+    var easymdeJs = Url.Content("~/Content/easymde/easymde.min.js");
+    var easymdeCss = Url.Content("~/Content/easymde/easymde.min.css");
+    var uploadUrl = Url.Action("UploadFile");
+    var entityId = (ViewContext.RouteData.Values["id"]?.ToString() ?? Context.Request.Query["id"].FirstOrDefault()) ?? "";
+}
+<textarea id="@editorId" name="@name">@value</textarea>
+<style>
+    /* 修复 Bootstrap .table{width:100%} 导致 EasyMDE table 按钮独占一行的问题 */
+    .editor-toolbar button.table {
+        width: auto;
+        max-width: none;
+        margin-bottom: 0;
+        border-collapse: initial;
+    }
+
+    /* 限制编辑器高度，超出滚动。
+       必须约束滚动容器 CodeMirror-scroll 本身（其 height:100% 在父级 auto 时解析为 auto）。
+       外层 .CodeMirror 不再限高：它带 border-box + padding:10px，若也限高，滚动到底时最后一行会被外层裁剪半截 */
+    .CodeMirror-scroll {
+        max-height: 600px;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        /* 移除 CodeMirror 核心 CSS 的 padding-bottom:50px / margin-bottom:-50px 底部留白 hack，
+           否则滚动容器高于外层可视区，滚动到底最后一行仍显示不全 */
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
+    }
+    /* 隐藏 CodeMirror 的水平滚动条高度测量元素（无类名 div，内联 position:absolute + border-bottom:0 solid transparent），
+       否则它会在内容下方预留约一个滚动条高度的空白，滚动到底时最后一行下方空白过大 */
+    .CodeMirror-scroll > div[style*="border-bottom: 0px solid transparent"] {
+        height: 0 !important;
+    }
+    /* 最后一行下方保留合理留白 */
+    .EasyMDEContainer .CodeMirror-lines {
+        padding-bottom: 12px;
+    }
+</style>
+<script>
+    (function () {
+        function initEasyMDE() {
+            if (typeof EasyMDE === 'undefined') return;
+            var ta = document.getElementById(@Json.Serialize(editorId));
+            if (!ta || ta._easymde) return;
+            ta._easymde = new EasyMDE({
+                element: ta,
+                spellChecker: false,
+                autoDownloadFontAwesome: false,
+                minHeight: '120px',
+                status: false,
+                uploadImage: true,
+                imageUploadFunction: function(file, onSuccess, onError) {
+                    if (!file.type.startsWith('image/')) { onError('只支持图片文件'); return; }
+                    var fd = new FormData();
+                    fd.append('file', file);
+                    var eid = @Json.Serialize(entityId);
+                    if (eid) fd.append('id', eid);
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', @Json.Serialize(uploadUrl));
+                    xhr.onload = function() {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            if (resp && resp.data && resp.data.filePath) onSuccess(resp.data.filePath);
+                            else onError(resp && resp.error ? resp.error : '上传失败');
+                        } catch(e) { onError('响应解析失败'); }
+                    };
+                    xhr.onerror = function() { onError('网络错误'); };
+                    xhr.send(fd);
+                },
+                toolbar: [
+                    'bold', 'italic', 'heading', '|',
+                    'quote', 'unordered-list', 'ordered-list', '|',
+                    'link', 'image', 'table', 'code', '|',
+                    'preview', 'side-by-side', 'fullscreen', '|',
+                    'guide'
+                ]
+            });
+        }
+
+        // 加载 EasyMDE（防重复加载，使用本地内嵌资源）
+        if (typeof EasyMDE !== 'undefined') {
+            initEasyMDE();
+        } else if (!document.querySelector('script[data-easymde]')) {
+            var css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = '@easymdeCss';
+            document.head.appendChild(css);
+
+            var js = document.createElement('script');
+            js.src = '@easymdeJs';
+            js.setAttribute('data-easymde', '1');
+            js.onload = function () { initEasyMDE(); };
+            document.head.appendChild(js);
+        } else {
+            // 脚本正在加载中，轮询等待
+            var timer = setInterval(function () {
+                if (typeof EasyMDE !== 'undefined') {
+                    clearInterval(timer);
+                    initEasyMDE();
+                }
+            }, 100);
+        }
+    })();
+</script>

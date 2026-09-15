@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
-using Microsoft.Extensions.DependencyInjection;
 using NewLife.Caching;
 using NewLife.Common;
 using NewLife.Cube.Entity;
@@ -42,26 +41,15 @@ public static class JobServiceExtersions
 }
 
 /// <summary>定时作业服务</summary>
-public class JobService : IHostedService
+/// <remarks>实例化作业服务</remarks>
+/// <param name="serviceProvider"></param>
+/// <param name="tracer"></param>
+public class JobService(IServiceProvider serviceProvider, ITracer tracer) : IHostedService
 {
     #region 核心控制
-
     private static readonly IList<MyJob> _jobs = [];
-    private readonly IServiceProvider _serviceProvider;
-    private ICacheProvider _cacheProvider;
-    private readonly ITracer _tracer;
-
-    /// <summary>实例化作业服务</summary>
-    /// <param name="serviceProvider"></param>
-    /// <param name="tracer"></param>
-    public JobService(IServiceProvider serviceProvider, ITracer tracer)
-    {
-        _tracer = tracer;
-        _serviceProvider = serviceProvider;
-        //_cacheProvider = serviceProvider.GetService<ICacheProvider>();
-    }
-
     private static TimerX _timer;
+
     /// <summary>启动</summary>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
@@ -101,7 +89,14 @@ public class JobService : IHostedService
 
     private void DoJob(Object state)
     {
-        _cacheProvider ??= _serviceProvider.GetService<ICacheProvider>();
+        // 应用结束时这里可能还在执行，要捕获特定异常
+        ICacheProvider cacheProvider = null;
+        try
+        {
+            cacheProvider = serviceProvider.GetService<ICacheProvider>();
+        }
+        catch (ObjectDisposedException) { return; }
+
         var list = CronJob.FindAll();
         foreach (var item in list)
         {
@@ -112,9 +107,9 @@ public class JobService : IHostedService
                 job = new MyJob
                 {
                     Job = item,
-                    CacheProvider = _cacheProvider,
-                    ServiceProvider = _serviceProvider,
-                    Tracer = _tracer
+                    CacheProvider = cacheProvider,
+                    ServiceProvider = serviceProvider,
+                    Tracer = tracer
                 };
                 _jobs.Add(job);
             }
@@ -290,12 +285,24 @@ internal class MyJob : IDisposable
 
             // 有时候可能并没有配置Redis，借助数据库事务实现去重，需要20230804版本的XCode
             using var tran = CronJob.Meta.CreateTrans();
+            var now = DateTime.Now;
 
             // 如果短时间内重复执行，跳过
             var job2 = CronJob.FindByKey(job.Id);
-            if (job2 != null && job2.LastTime.AddSeconds(5) > DateTime.Now) return true;
+            if (job2 != null)
+            {
+                // 检测并修正异常的LastTime（如果在将来超过5秒，则认为是异常数据，重置为当前时间）
+                if (job2.LastTime > now.AddSeconds(5))
+                {
+                    job2.LastTime = now;
+                }
+                else if (job2.LastTime.AddSeconds(5) > now)
+                {
+                    return true;
+                }
+            }
 
-            job2.LastTime = DateTime.Now;
+            job2.LastTime = now;
             job2.Update();
 
             tran.Commit();
@@ -337,7 +344,7 @@ internal class MyJob : IDisposable
             {
                 // 新功能IServiceProvider.CreateInstance可以在第二位创建对象，定时任务类就不需要注册到容器里面了
                 var instance = ServiceProvider?.GetService(_type);
-                instance ??= NewLife.Model.ModelExtension.CreateInstance(ServiceProvider, _type);
+                instance ??= Model.ModelExtension.CreateInstance(ServiceProvider, _type);
                 instance ??= _type?.CreateInstance();
                 if (instance is ICubeJob cubeJob)
                 {

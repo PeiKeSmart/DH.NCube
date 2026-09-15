@@ -1,22 +1,27 @@
 ﻿using System.ComponentModel;
+using NewLife.Cube.Models;
 using NewLife.Cube.ViewModels;
+using NewLife.Data;
 using NewLife.Web;
+using XCode;
 using XCode.Membership;
 
 namespace NewLife.Cube.Areas.Admin.Controllers;
 
 /// <summary>部门</summary>
+/// <remarks>实例化</remarks>
+/// <param name="tenantContext">租户上下文</param>
 [DataPermission(null, "ManagerID={#userId}")]
 [DisplayName("部门")]
 [AdminArea]
 [Menu(95, true, Icon = "fa-users", Mode = MenuModes.Admin | MenuModes.Tenant)]
-public class DepartmentController : EntityController<Department, DepartmentModel>
+public class DepartmentController(ITenantContext tenantContext) : EntityController<Department, DepartmentModel>
 {
     static DepartmentController()
     {
         LogOnChange = true;
 
-        ListFields.RemoveField("Id", "TenantId", "Ex1", "Ex2", "Ex3", "Ex4", "Ex5", "Ex6");
+        ListFields.RemoveField("TenantId", "Ex1", "Ex2", "Ex3", "Ex4", "Ex5", "Ex6");
         ListFields.RemoveUpdateField();
         ListFields.RemoveCreateField();
         ListFields.RemoveRemarkField();
@@ -34,7 +39,7 @@ public class DepartmentController : EntityController<Department, DepartmentModel
     {
         var rs = base.OnGetFields(kind, model);
 
-        if (TenantContext.CurrentId > 0)
+        if (tenantContext.TenantId > 0)
         {
             switch (kind)
             {
@@ -61,7 +66,8 @@ public class DepartmentController : EntityController<Department, DepartmentModel
         {
             var list = new List<Department>();
             var entity = Department.FindByID(id);
-            if (entity != null) list.Add(entity);
+            // 分页查询由 WhereBuilder 按管理者过滤，本分支需自行判断，避免绕过数据权限
+            if (entity != null && CanView(entity)) list.Add(entity);
             return list;
         }
 
@@ -81,10 +87,62 @@ public class DepartmentController : EntityController<Department, DepartmentModel
     {
         if (/*!post &&*/ type == DataObjectMethodType.Insert)
         {
-            if (entity.TenantId == 0) entity.TenantId = TenantContext.CurrentId;
+            if (entity.TenantId == 0) entity.TenantId = tenantContext.TenantId;
             if (entity.ManagerId == 0) entity.ManagerId = ManageProvider.Provider.Current.ID;
         }
 
         return base.Valid(entity, type, post);
+    }
+
+    /// <summary>查找单行数据，并判断数据权限</summary>
+    /// <param name="key"></param>
+    /// <returns></returns>
+    protected override Department FindData(Object key)
+    {
+        var entity = Find(key);
+
+        // 不用 WhereBuilder.Eval：部门实现 ITenantScope，无租户上下文时求值恒为 false；
+        // 可见性以管理者字段为准（与 [DataPermission] 的列表过滤一致）
+        if (entity != null && !CanView(entity)) throw new InvalidOperationException($"非法访问数据[{key}]");
+
+        return entity;
+    }
+
+    /// <summary>判断当前用户能否查看指定部门。系统角色不受限，普通用户仅限自己管理的部门</summary>
+    /// <param name="entity">部门</param>
+    /// <returns></returns>
+    protected virtual Boolean CanView(Department entity)
+    {
+        var user = ManageProvider.User;
+        if (user == null || user.Roles.Any(e => e.IsSystem)) return true;
+
+        return entity.ManagerId == user.ID;
+    }
+
+    /// <summary>合并导入。查出表中已有数据匹配，能匹配的更新，无法匹配的批量插入</summary>
+    /// <param name="factory">实体工厂</param>
+    /// <param name="list">新数据列表</param>
+    /// <param name="context">导入上下文（含表头与字段）</param>
+    /// <returns>受影响行数</returns>
+    protected override Int32 OnMerge(IEntityFactory factory, IList<IEntity> list, ImportContext context)
+    {
+        if (list == null || list.Count == 0) return 0;
+
+        // 查询已有数据
+        var olds = Department.FindAll();
+        // 重置主键，避免重复
+        foreach (var item in list)
+        {
+            if (item is Department dep) dep.ID = 0;
+        }
+
+        static Boolean match(IEntity e, IModel m)
+        {
+            var de = (Department)e;
+            var dm = (Department)m;
+            return de.TenantId == dm.TenantId && de.ParentID == dm.ParentID && de.Name.EqualIgnoreCase(dm.Name);
+        }
+
+        return factory.Merge(list, olds.Cast<IEntity>().ToList(), context.Fields, match);
     }
 }

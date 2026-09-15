@@ -1,13 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using NewLife.Data;
-using NewLife.IO;
 using NewLife.Log;
-using NewLife.Security;
 using NewLife.Serialization;
 
 namespace Test
@@ -17,15 +13,6 @@ namespace Test
         static void Main(String[] args)
         {
             XTrace.UseConsole();
-
-            try
-            {
-                Test1();
-            }
-            catch (Exception ex)
-            {
-                XTrace.WriteException(ex);
-            }
 
             Console.WriteLine("OK!");
             Console.ReadKey();
@@ -83,21 +70,6 @@ namespace Test
 
             var html2 = await http.GetStringAsync(url2);
             XTrace.WriteLine(html2);
-        }
-
-        static void Test3()
-        {
-            using var csv = new CsvFile("Area.csv");
-            while (true)
-            {
-                var line = csv.ReadLine();
-                if (line == null) break;
-
-                for (int i = 0; i < line.Length; i++)
-                {
-                    if (line[i].Length >= 45) XTrace.WriteLine(line[i]);
-                }
-            }
         }
 
         /// <summary>分段下载</summary>

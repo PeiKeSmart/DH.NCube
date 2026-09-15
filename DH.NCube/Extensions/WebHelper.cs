@@ -121,19 +121,36 @@ public static class WebHelper
     /// <summary>获取原始请求Url，支持反向代理</summary>
     /// <param name="request"></param>
     /// <returns></returns>
-    public static Uri GetRawUrl(this HttpRequest request)
+    public static UriInfo GetRawUrl(this HttpRequest request)
     {
-        // 加速，避免重复计算
-        if (request.HttpContext.Items["_RawUrl"] is Uri uri) return uri;
+        UriInfo? uri = null;
 
         // 取请求头
         var url = request.GetEncodedUrl();
-        uri = new Uri(url);
+        try
+        {
+            uri = new UriInfo(url);
+        }
+        catch (Exception ex)
+        {
+            DefaultSpan.Current?.AppendTag($"GetRawUrl：{url} 失败：{ex.Message}");
+            var port = request.Scheme switch
+            {
+                "https" => 443,
+                "http" => 80,
+                _ => 0
+            };
+            uri = new UriInfo
+            {
+                Scheme = request.Scheme,
+                Host = request.Host.Host,
+                Port = request.Host.Port ?? port,
+                AbsolutePath = request.PathBase + request.Path,
+                Query = request.QueryString.ToUriComponent()
+            };
+        }
 
-        uri = GetRawUrl(uri, k => request.Headers[k]);
-        request.HttpContext.Items["_RawUrl"] = uri;
-
-        return uri;
+        return GetRawUrl(uri, k => request.Headers[k]);
     }
 
     /// <summary>保存上传文件</summary>
@@ -147,25 +164,28 @@ public static class WebHelper
         fs.SetLength(fs.Position);
     }
 
-    private static Uri GetRawUrl(Uri uri, Func<String, String> headers)
+    private static UriInfo GetRawUrl(UriInfo uri, Func<String, String> headers)
     {
         var str = headers("HTTP_X_REQUEST_URI");
         if (str.IsNullOrEmpty()) str = headers("X-Request-Uri");
 
-        if (str.IsNullOrEmpty())
+        if (!str.IsNullOrEmpty()) uri = new UriInfo(str);
+
+        // 阿里云CDN默认支持 X-Client-Scheme: https
+        var scheme = headers("HTTP_X_CLIENT_SCHEME");
+        if (scheme.IsNullOrEmpty()) scheme = headers("X-Client-Scheme");
+
+        // nginx
+        if (scheme.IsNullOrEmpty()) scheme = headers("HTTP_X_FORWARDED_PROTO");
+        if (scheme.IsNullOrEmpty()) scheme = headers("X-Forwarded-Proto");
+
+        // 多层反代时头部值可能为逗号分隔的多值，如 "https,https"，取第一个有效值
+        if (!scheme.IsNullOrEmpty())
         {
-            // 阿里云CDN默认支持 X-Client-Scheme: https
-            var scheme = headers("HTTP_X_CLIENT_SCHEME");
-            if (scheme.IsNullOrEmpty()) scheme = headers("X-Client-Scheme");
-
-            // nginx
-            if (scheme.IsNullOrEmpty()) scheme = headers("HTTP_X_FORWARDED_PROTO");
-            if (scheme.IsNullOrEmpty()) scheme = headers("X-Forwarded-Proto");
-
-            if (!scheme.IsNullOrEmpty()) str = scheme + "://" + uri.ToString().Substring("://");
+            var p = scheme.IndexOf(',');
+            if (p > 0) scheme = scheme[..p];
+            uri.Scheme = scheme.Trim();
         }
-
-        if (!str.IsNullOrEmpty()) uri = new Uri(uri, str);
 
         return uri;
     }
@@ -310,6 +330,19 @@ public static class WebHelper
     }
     #endregion
 
+    #region API前缀
+    /// <summary>去掉URL开头的API前缀，还原为前端路由。WebAPI版实体/后台控制器路由固定 /api 前缀，菜单/权限/回跳地址需还原为前端路由 /{area}/{controller}/{action}；MVC版无前缀，为no-op</summary>
+    /// <param name="url">目标地址</param>
+    /// <returns>去掉 /api 前缀后的地址</returns>
+    public static String TrimApiPrefix(this String url)
+    {
+        if (!url.IsNullOrEmpty() && url.StartsWithIgnoreCase("/api/"))
+            return url[4..];
+
+        return url;
+    }
+    #endregion
+
     #region 辅助
 
     internal static Boolean ValidRobot(Microsoft.AspNetCore.Http.HttpContext ctx, UserAgentParser ua)
@@ -349,6 +382,21 @@ public static class WebHelper
         if (id.IsNullOrEmpty()) id = ctx.Request.Cookies["CubeDeviceId0"];
         if (id.IsNullOrEmpty())
         {
+            var token = GetToken(ctx);
+            if (!token.IsNullOrEmpty())
+            {
+                var jwt = new JwtBuilder();
+                jwt.Parse(token);
+
+                // 使用Jwt的唯一Id作为设备Id，保证同一设备多应用一致
+                id = jwt.Id;
+
+                // 使用令牌的哈希作为设备Id，保证同一设备多应用一致
+                if (id.IsNullOrEmpty()) id = token.GetBytes().MD5().ToHex();
+            }
+        }
+        if (id.IsNullOrEmpty())
+        {
             id = Rand.NextString(16);
 
             var option = new CookieOptions
@@ -361,7 +409,8 @@ public static class WebHelper
             };
 
             // https时，SameSite使用None，此时可以让cookie写入有最好的兼容性，跨域也可以读取
-            if (ctx.Request.GetRawUrl().Scheme.EqualIgnoreCase("https"))
+            var uri = ctx.Request.GetRawUrl();
+            if (uri != null && uri.Scheme.EqualIgnoreCase("https"))
             {
                 //var domain = CubeSetting.Current.CookieDomain;
                 //if (!domain.IsNullOrEmpty())
@@ -384,6 +433,34 @@ public static class WebHelper
         }
 
         return id;
+    }
+
+    /// <summary>从令牌中获取用户名</summary>
+    /// <param name="ctx"></param>
+    /// <returns></returns>
+    public static String GetUserByToken(Microsoft.AspNetCore.Http.HttpContext ctx)
+    {
+        var token = GetToken(ctx);
+        if (token.IsNullOrEmpty()) return null;
+
+        var jwt = new JwtBuilder();
+        jwt.Parse(token);
+
+        return jwt.Subject;
+    }
+
+    /// <summary>从请求头中获取令牌</summary>
+    /// <param name="httpContext"></param>
+    /// <returns></returns>
+    static String GetToken(Microsoft.AspNetCore.Http.HttpContext httpContext)
+    {
+        var request = httpContext.Request;
+        var token = request.Query["Token"] + "";
+        if (token.IsNullOrEmpty()) token = (request.Headers["Authorization"] + "").TrimPrefix("Bearer ");
+        if (token.IsNullOrEmpty()) token = request.Headers["X-Token"] + "";
+        if (token.IsNullOrEmpty()) token = request.Cookies["Token"] + "";
+
+        return token;
     }
     #endregion
 }

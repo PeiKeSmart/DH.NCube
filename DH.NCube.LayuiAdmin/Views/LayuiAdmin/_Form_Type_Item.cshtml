@@ -85,7 +85,7 @@
 					var set = entity.GetType().GetValue("Setting") as IEntityTreeSetting;
 					if (set == null || set.Parent != item.Name)
 					{
-					   @await Html.PartialAsync("_Form_Editor", new EntityField(entity, item))
+						@await Html.PartialAsync("_Form_Editor", new EntityField(entity, item))
 					}
 					else
 					{

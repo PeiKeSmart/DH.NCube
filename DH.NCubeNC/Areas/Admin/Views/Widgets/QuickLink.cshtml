@@ -1,0 +1,13 @@
+@model dynamic
+@{
+    var d = Model;
+}
+<div class="widget-quicklinks">
+    @foreach (dynamic link in d.Links)
+    {
+        <a class="quicklink-item" href="@link.Url" title="@link.Name">
+            <i class="fa @(String.IsNullOrEmpty(link.Icon) ? "fa-th-large" : link.Icon)"></i>
+            <span>@link.Name</span>
+        </a>
+    }
+</div>

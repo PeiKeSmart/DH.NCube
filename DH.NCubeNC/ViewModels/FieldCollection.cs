@@ -106,7 +106,8 @@ public class FieldCollection : List<DataField>
                 foreach (var dc in builder.GetColumns())
                 {
                     var field = factory.Table.FindByName(dc.Name);
-                    if (field is null) return;
+                    // 索引列在实体中无对应字段时跳过该列，避免静默截断后续搜索字段
+                    if (field is null) continue;
 
                     var sf = Create(field) as SearchField;
 
@@ -328,7 +329,7 @@ public class FieldCollection : List<DataField>
     /// <returns></returns>
     public FieldCollection RemoveCreateField()
     {
-        RemoveAll(e => e.Name.EqualIgnoreCase("CreateUserID", "CreateUser", "CreateTime", "CreateIP"));
+        RemoveAll(e => e.Name.EqualIgnoreCase("CreateUserID", "CreateUser", "CreateUserName", "CreateTime", "CreateIP"));
 
         return this;
     }
@@ -337,7 +338,7 @@ public class FieldCollection : List<DataField>
     /// <returns></returns>
     public FieldCollection RemoveUpdateField()
     {
-        RemoveAll(e => e.Name.EqualIgnoreCase("UpdateUserID", "UpdateUser", "UpdateTime", "UpdateIP"));
+        RemoveAll(e => e.Name.EqualIgnoreCase("UpdateUserID", "UpdateUser", "UpdateUserName", "UpdateTime", "UpdateIP"));
 
         return this;
     }

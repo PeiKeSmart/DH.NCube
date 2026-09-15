@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Web.Script.Serialization;
@@ -18,10 +18,10 @@ namespace NewLife.Cube.Entity
             // 累加字段
             Meta.Factory.AdditionalFields.Add(__.Times);
 
-            // 过滤器 UserModule、TimeModule、IPModule
-            Meta.Modules.Add<UserModule>();
-            Meta.Modules.Add<TimeModule>();
-            Meta.Modules.Add<IPModule>();
+            // 过滤器 UserInterceptor、TimeInterceptor、IPInterceptor
+            Meta.Interceptors.Add<UserInterceptor>();
+            Meta.Interceptors.Add<TimeInterceptor>();
+            Meta.Interceptors.Add<IPInterceptor>();
 
 
             var sc = Meta.SingleCache;
@@ -145,6 +145,37 @@ namespace NewLife.Cube.Entity
             //if (!user.Roles.Any(r => r.IsSystem)) throw new Exception("无权查看该数据");
 
             return ut;
+        }
+
+        /// <summary>吊销指定用户的所有令牌。用于单设备模式注销或强制踢下线</summary>
+        /// <param name="userId">用户编号</param>
+        /// <returns>吊销的令牌数</returns>
+        public static Int32 RevokeByUser(Int32 userId)
+        {
+            if (userId <= 0) return 0;
+
+            var list = FindAllByUserID(userId);
+            foreach (var item in list)
+            {
+                item.Enable = false;
+                item.Update();
+            }
+
+            return list.Count;
+        }
+
+        /// <summary>吊销指定令牌</summary>
+        /// <param name="tokenId">令牌编号</param>
+        /// <returns>是否成功</returns>
+        public static Boolean RevokeByTokenId(Int32 tokenId)
+        {
+            var ut = FindByID(tokenId);
+            if (ut == null) return false;
+
+            ut.Enable = false;
+            ut.Update();
+
+            return true;
         }
         #endregion
     }

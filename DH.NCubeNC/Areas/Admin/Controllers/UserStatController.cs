@@ -2,9 +2,7 @@
 using NewLife.Cube.Charts.Models;
 using NewLife.Cube.Entity;
 using NewLife.Web;
-
 using XCode.Membership;
-
 using static NewLife.Cube.Entity.UserStat;
 
 namespace NewLife.Cube.Areas.Admin.Controllers;

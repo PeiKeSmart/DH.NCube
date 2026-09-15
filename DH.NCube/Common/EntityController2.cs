@@ -1,7 +1,8 @@
 ﻿using System.ComponentModel;
 using System.IO.Compression;
 using System.Text;
-
+using Microsoft.AspNetCore.Mvc;
+using NewLife.Collections;
 using NewLife.Cube.Entity;
 using NewLife.Cube.Models;
 using NewLife.Cube.ViewModels;
@@ -10,12 +11,11 @@ using NewLife.Log;
 using NewLife.Reflection;
 using NewLife.Serialization;
 using NewLife.Web;
-
+using Stardust.Storages;
 using XCode;
 using XCode.Configuration;
 using XCode.Membership;
-
-using ExcelReader = NewLife.Office.ExcelReader;
+using XCode.Model;
 
 namespace NewLife.Cube;
 
@@ -31,6 +31,9 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     #region 构造
     /// <summary>实例化</summary>
     public EntityController() => PageSetting.IsReadOnly = false;
+
+    /// <summary>是否启用基于 Model.xml 元数据的自动字段校验（必填、长度等）。默认 true。子类可 override 返回 false 关闭</summary>
+    protected virtual Boolean EnableFieldValidation => false;
     #endregion
 
     #region 默认Action
@@ -84,108 +87,6 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     }
 
     private static FieldItem GetDeleteField() => Factory.Fields.FirstOrDefault(e => e.Name.EqualIgnoreCase("Deleted", "IsDelete", "IsDeleted") && e.Type == typeof(Boolean));
-
-    /// <summary>保存所有上传文件，并保存附件访问路径到实体对象的对应属性</summary>
-    /// <param name="entity">实体对象</param>
-    /// <param name="uploadPath">上传目录。为空时默认UploadPath配置</param>
-    /// <returns></returns>
-    protected virtual async Task<IList<String>> SaveFiles(TEntity entity, String uploadPath = null)
-    {
-        var rs = new List<String>();
-        var list = new List<String>();
-
-        if (!Request.HasFormContentType) return list;
-
-        var files = Request.Form.Files;
-        var fields = Factory.Fields;
-        foreach (var fi in fields)
-        {
-            var dc = fi.Field;
-            if (dc.IsAttachment())
-            {
-                // 允许一次性上传多个文件到服务端
-                foreach (var file in files)
-                {
-                    if (file.Name.EqualIgnoreCase(fi.Name, fi.Name + "_attachment"))
-                    {
-                        var att = await SaveFile(entity, file, uploadPath, null);
-                        if (att != null)
-                        {
-                            var url = ViewHelper.GetAttachmentUrl(att);
-                            list.Add(url);
-                            rs.Add(url);
-                        }
-                    }
-                }
-
-                if (list.Count > 0)
-                {
-                    entity.SetItem(fi.Name, list.Join(";"));
-                    list.Clear();
-                }
-            }
-        }
-
-        return rs;
-    }
-
-    /// <summary>保存单个文件。新建附件</summary>
-    /// <param name="entity">实体对象。读取主键与标题，不修改实体对象</param>
-    /// <param name="file">文件</param>
-    /// <param name="uploadPath">上传目录，默认使用UploadPath配置</param>
-    /// <param name="fileName">文件名，如若指定则忽略前面的目录</param>
-    /// <returns></returns>
-    protected virtual async Task<Attachment> SaveFile(TEntity entity, IFormFile file, String uploadPath, String fileName)
-    {
-        if (file == null) throw new ArgumentNullException(nameof(file));
-        if (fileName.IsNullOrEmpty()) fileName = file.FileName;
-
-        using var span = DefaultTracer.Instance?.NewSpan(nameof(SaveFile), new { name = file.Name, fileName, uploadPath });
-
-        var id = Factory.Unique != null ? entity[Factory.Unique] : null;
-        var att = new Attachment
-        {
-            Category = typeof(TEntity).Name,
-            Key = id + "",
-            Title = entity + "",
-            //FileName = fileName ?? file.FileName,
-            ContentType = file.ContentType,
-            Size = file.Length,
-            Enable = true,
-            UploadTime = DateTime.Now,
-        };
-
-        if (id != null)
-        {
-            var ss = GetControllerAction();
-            att.Url = $"/{ss[0]}/{ss[1]}?id={id}";
-        }
-
-        var rs = false;
-        var msg = "";
-        try
-        {
-            rs = await att.SaveFile(file.OpenReadStream(), uploadPath, fileName);
-        }
-        catch (Exception ex)
-        {
-            rs = false;
-            msg = ex.Message;
-            span?.SetError(ex, att);
-
-            throw;
-        }
-        finally
-        {
-            // 写日志
-            var type = entity.GetType();
-            var log = LogProvider.Provider.CreateLog(type, "上传", rs, $"上传 {file.FileName} ，目录 {uploadPath} ，保存为 {att.FilePath} " + msg, 0, null, UserHost);
-            log.LinkID = id.ToLong();
-            log.SaveAsync();
-        }
-
-        return att;
-    }
 
     /// <summary>
     /// 批量启用或禁用
@@ -293,22 +194,39 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     {
         if (list == null || list.Count == 0) return 0;
 
-        return factory.Merge(list, context.Fields);
+        return factory.Merge(list, null, context.Fields);
     }
 
     /// <summary>导入数据默认保存</summary>
     /// <remarks>
-    /// 导入的新数据合并到旧数据，已有更新，没有则插入。
-    /// 主要按主键来查找判断是否已存在。
+    /// 默认导入模式Auto，如果TotalCount是0则直接插入，否则按Merge合并处理。
+    /// 默认合并逻辑：导入的新数据合并到旧数据，已有更新，没有则插入。主要按主键来查找判断是否已存在。
     /// 该方案并不全面，需要使用者自己重载来实现精细化的合并逻辑。
+    /// 
+    /// 因此，空表导入时，默认就是批量插入，拥有很好的性能；非空表时，合并会比较慢（一般是批量插入的10倍以上耗时）。
+    /// 业务分区的数据（例如按天ds分区），如果导入某个分区数据，开发者可以重载，查询该分区行数赋值给TotalCount，促使父类实现在空数据时执行批量插入。
     /// </remarks>
-    /// <param name="factory"></param>
-    /// <param name="list"></param>
-    /// <param name="context"></param>
+    /// <param name="factory">实体工厂</param>
+    /// <param name="list">新数据列表</param>
+    /// <param name="context">导入上下文（含表头与字段）</param>
     /// <returns></returns>
     protected virtual Int32 OnImport(IEntityFactory factory, IList<IEntity> list, ImportContext context)
     {
         if (list.Count == 0) return 0;
+
+        // 总行数
+        var totalRows = 0L;
+        if (context.TotalCount != null)
+            totalRows = context.TotalCount.Value;
+        else
+        {
+            totalRows = factory.Session.Count;
+            if (totalRows < 10000) totalRows = (Int32)factory.FindCount();
+            context.TotalCount = totalRows;
+        }
+
+        // 所有字段参与插入
+        var option = new BatchOption { FullInsert = true };
 
         // 如果是当前实体类型，直接转换为强类型列表，提高性能
         if (factory == Factory && list[0] is TEntity)
@@ -316,40 +234,37 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
             var typed = list.Cast<TEntity>().ToList();
             return context.Mode switch
             {
-                ImportMode.Insert => typed.Insert(),
-                ImportMode.InsertIgnore => typed.BatchInsertIgnore(),
-                ImportMode.Replace => typed.BatchReplace(),
-                ImportMode.Upsert => typed.Upsert(),
+                ImportMode.Insert => typed.BatchInsert(option),
+                ImportMode.InsertIgnore => typed.BatchInsertIgnore(option),
+                ImportMode.Replace => typed.BatchReplace(option),
+                ImportMode.Upsert => typed.BatchUpsert(option),
                 ImportMode.Merge => OnMerge(factory, list, context),
-                _ => OnMerge(factory, list, context),
+                _ => totalRows == 0 ? typed.BatchInsert(option) : OnMerge(factory, list, context),
             };
         }
-
-        // 总行数
-        var totalRows = factory.Session.Count;
-        if (totalRows < 10000) totalRows = (Int32)factory.FindCount();
 
         // 根据导入模式进行处理
         switch (context.Mode)
         {
             case ImportMode.Insert:
                 // 仅插入，冲突即异常
-                return list.Insert();
+                return list.BatchInsert(option);
             case ImportMode.InsertIgnore:
                 // 插入忽略冲突
-                return list.BatchInsertIgnore();
+                return list.BatchInsertIgnore(option);
             case ImportMode.Replace:
                 // 覆盖插入（替换）
-                return list.BatchReplace();
+                return list.BatchReplace(option);
             case ImportMode.Upsert:
                 // 冲突时更新
-                return list.Upsert();
+                return list.BatchUpsert(option);
             case ImportMode.Merge:
+                return OnMerge(factory, list, context);
             case ImportMode.Auto:
             default:
                 {
                     // 判断已有数据，如果没有直接插入
-                    if (totalRows == 0) return list.Insert();
+                    if (totalRows == 0) return list.BatchInsert(option);
 
                     return OnMerge(factory, list, context);
                 }
@@ -364,6 +279,8 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     /// <returns></returns>
     protected virtual Int32 ImportExcel(String name, Stream stream, IEntityFactory factory, Pager page)
     {
+        using var span = DefaultTracer.Instance?.NewSpan(nameof(ImportExcel), new { name, entity = factory?.EntityType.FullName });
+
         using var reader = new ExcelReader(stream, Encoding.UTF8);
 
         var headers = new List<String>();
@@ -398,6 +315,19 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
                     blank++;
                     headers.Clear();
                     fields.Clear();
+                }
+                else
+                {
+                    // 表头与字段映射信息写入到日志
+                    var sb = Pool.StringBuilder.Get();
+                    for (var i = 0; i < headers.Count && i < fields.Count; i++)
+                    {
+                        if (sb.Length > 0) sb.Append(",");
+                        sb.AppendFormat("{0}=>{1}", headers[i], fields[i]?.Name);
+                    }
+                    var map = sb.Return(true);
+                    WriteLog("导入Excel", true, $"表头与字段映射[{headers.Count}]：{map}");
+                    span?.AppendTag(map);
                 }
 
                 context.Headers = headers.ToArray();
@@ -441,6 +371,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
                 {
                     result += OnImport(factory, list, context);
                     list.Clear();
+                    span?.Value = result;
                 }
             }
         }
@@ -453,6 +384,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
 
         var msg = $"导入[{name}]，共[{total}]行，成功[{result}]行，{blank}行无效！";
         WriteLog("导入Excel", true, msg);
+        span?.Value = result;
 
         return result;
     }
@@ -465,6 +397,8 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     /// <returns></returns>
     protected virtual Int32 ImportCsv(String name, Stream stream, IEntityFactory factory, Pager page)
     {
+        using var span = DefaultTracer.Instance?.NewSpan(nameof(ImportCsv), new { name, entity = factory?.EntityType.FullName });
+
         using var reader = new CsvFile(stream, true);
 
         var headers = new List<String>();
@@ -500,6 +434,19 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
                     headers.Clear();
                     fields.Clear();
                 }
+                else
+                {
+                    // 表头与字段映射信息写入到日志
+                    var sb = Pool.StringBuilder.Get();
+                    for (var i = 0; i < headers.Count && i < fields.Count; i++)
+                    {
+                        if (sb.Length > 0) sb.Append(",");
+                        sb.AppendFormat("{0}=>{1}", headers[i], fields[i]?.Name);
+                    }
+                    var map = sb.Return(true);
+                    WriteLog("导入Csv", true, $"表头与字段映射[{headers.Count}]：{map}");
+                    span?.AppendTag(map);
+                }
 
                 context.Headers = headers.ToArray();
                 context.Fields = fields.ToArray();
@@ -532,6 +479,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
                 {
                     result += OnImport(factory, list, context);
                     list.Clear();
+                    span?.Value = result;
                 }
             }
         }
@@ -544,6 +492,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
 
         var msg = $"导入[{name}]，共[{total}]行，成功[{result}]行，{blank}行无效！";
         WriteLog("导入Csv", true, msg);
+        span?.Value = result;
 
         return result;
     }
@@ -556,6 +505,8 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     /// <returns></returns>
     protected virtual Int32 ImportJson(String name, Stream stream, IEntityFactory factory, Pager page)
     {
+        using var span = DefaultTracer.Instance?.NewSpan(nameof(ImportJson), new { name, entity = factory?.EntityType.FullName });
+
         var json = new JsonParser(stream.ToStr());
 
         var list = new List<IEntity>();
@@ -567,11 +518,21 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
         var context = new ImportContext { Name = name, Stream = stream, Page = page };
         context["_json"] = json;
 
-        // 解析json
-        foreach (var item in json.Decode() as IList<Object>)
+        // 解析json，仅支持数组根节点，其它格式给出明确错误
+        var items = json.Decode() as IList<Object>;
+        if (items == null) throw new XException("Json导入仅支持数组格式！");
+
+        foreach (var item in items)
         {
             var data = item as IDictionary<String, Object>;
             total++;
+
+            // 非对象元素（如标量）无法映射字段，跳过
+            if (data == null)
+            {
+                blank++;
+                continue;
+            }
 
             // 实例化实体对象，读取一行，逐个字段赋值
             var entity = factory.Create() as TEntity;
@@ -591,6 +552,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
             {
                 result += OnImport(factory, list, context);
                 list.Clear();
+                span?.Value = result;
             }
         }
 
@@ -602,6 +564,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
 
         var msg = $"导入[{name}]，共[{total}]行，成功[{result}]行，{blank}行无效！";
         WriteLog("导入Json", true, msg);
+        span?.Value = result;
 
         return result;
     }
@@ -614,16 +577,19 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     /// <returns></returns>
     protected virtual Int32 ImportZip(String name, Stream stream, IEntityFactory factory, Pager page)
     {
+        using var span = DefaultTracer.Instance?.NewSpan(nameof(ImportZip), new { name, entity = factory?.EntityType.FullName });
+
         // 解压并读取数据集
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
 
-        var rs = 0;
+        var result = 0;
         foreach (var entry in zip.Entries)
         {
             if (entry.Length <= 0) continue;
 
             var ext = Path.GetExtension(entry.Name).ToLower();
-            if (ext.IsNullOrEmpty()) return 0;
+            // 无扩展名的文件无法识别类型，跳过该文件，不中止整个导入
+            if (ext.IsNullOrEmpty()) continue;
 
             var entryName = entry.Name[..^ext.Length];
             var type = Type.GetType(entryName) ?? entryName.GetTypeEx();
@@ -637,10 +603,11 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
                 if (entryName.EqualIgnoreCase(type.Name, type.FullName)) factory2 = Factory;
             }
             factory2 ??= factory;
+            span?.AppendTag($"{entry.Name}=>{factory2?.EntityType.FullName}");
 
             // 仅解析当前控制器对应的数据集，其它数据交给 OnImportZip 重载处理
             using var entryStream = entry.Open();
-            rs += ext switch
+            result += ext switch
             {
                 ".xls" or ".xlsx" => ImportExcel(entryName, entryStream, factory2, page),
                 ".csv" => ImportCsv(entryName, entryStream, factory2, page),
@@ -649,12 +616,14 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
                 ".db" => ImportDb(entryName, entryStream, factory2, page),
                 _ => 0,
             };
+            span?.Value = result;
         }
 
-        var msg = $"导入[{name}]，成功[{rs}]行！";
+        var msg = $"导入[{name}]，成功[{result}]行！";
         WriteLog("导入Zip", true, msg);
+        span?.Value = result;
 
-        return rs;
+        return result;
     }
 
     /// <summary>导入Zip时，处理附属数据集或自定义导入逻辑</summary>
@@ -667,6 +636,7 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
     {
         if (factory == null) return 0;
 
+        using var span = DefaultTracer.Instance?.NewSpan(nameof(ImportDb), new { name, entity = factory?.EntityType.FullName });
         var list = new List<IEntity>();
         var batchSize = XCodeSetting.Current.BatchSize;
         if (batchSize <= 0) batchSize = 10_000;
@@ -681,20 +651,266 @@ public partial class EntityController<TEntity, TModel> : ReadOnlyEntityControlle
 
             if (list.Count >= batchSize)
             {
+                span?.Value += list.Count;
                 result += OnImport(factory, list, context);
                 list.Clear();
+                span?.Value = result;
             }
         }
 
         if (list.Count > 0)
         {
+            span?.Value += list.Count;
             result += OnImport(factory, list, context);
         }
 
         var msg = $"导入[{name}]，共[{total}]行，成功[{result}]行！";
         WriteLog("导入Db", true, msg);
+        span?.Value = result;
 
         return result;
+    }
+    #endregion
+
+    #region 文件上传
+    // 禁止上传的危险文件扩展名（可执行文件、脚本、服务端解析文件等）
+    private static readonly HashSet<String> _dangerousExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".dll", ".bat", ".cmd", ".ps1", ".sh", ".php", ".asp", ".aspx",
+        ".jsp", ".vbs", ".wsf", ".jar", ".msi", ".scr", ".pif", ".com", ".cpl",
+    };
+
+    /// <summary>校验上传文件合法性。子类可重载以实现自定义校验规则</summary>
+    /// <param name="file">上传文件</param>
+    /// <param name="error">校验失败时的错误信息</param>
+    /// <returns>是否合法</returns>
+    protected virtual Boolean ValidateUploadFile(IFormFile file, out String error)
+    {
+        if (file == null || file.Length == 0)
+        {
+            error = "未收到文件";
+            return false;
+        }
+
+        var ext = Path.GetExtension(file.FileName);
+        if (!ext.IsNullOrEmpty() && _dangerousExtensions.Contains(ext))
+        {
+            error = $"禁止上传该类型文件：{ext}";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>上传编辑器文件，关联当前实体</summary>
+    /// <param name="file">上传文件</param>
+    /// <param name="id">实体主键。大于零时关联已有实体；为零时属新增场景，以临时实体归类路径，表单保存后通过 attachmentIds 绑定主记录</param>
+    /// <param name="title">附件标题（主记录显示名）。为空时使用 entity.ToString()；新增场景下主记录尚未保存，可传入预期标题</param>
+    /// <returns>附件编号、文件路径、MIME 类型</returns>
+    [HttpPost]
+    public virtual async Task<ActionResult> UploadFile(IFormFile file, String id = null, String title = null)
+    {
+        if (!ValidateUploadFile(file, out var error))
+            return new JsonResult(new { error });
+
+        TEntity entity;
+        if (!id.IsNullOrEmpty())
+            entity = FindData(id) ?? Factory.Create(true) as TEntity;
+        else
+            entity = Factory.Create(true) as TEntity;
+
+        Attachment att;
+        try
+        {
+            att = await SaveFile(entity, file, null, null);
+            if (!title.IsNullOrEmpty())
+            {
+                att.Title = title;
+                att.Update();
+            }
+        }
+        catch (Exception ex)
+        {
+            return new JsonResult(new { error = ex.Message });
+        }
+
+        var url = ViewHelper.GetAttachmentUrl(att);
+        return Json(0, null, new { attId = att.Id, filePath = url, contentType = att.ContentType });
+    }
+
+    /// <summary>从请求 QueryString 或表单中读取 attachmentIds 参数</summary>
+    /// <returns>附件 ID 数组；无则返回空数组</returns>
+    protected virtual Int64[] GetAttachmentIds()
+    {
+        if (Request.Query.TryGetValue("attachmentIds", out var qv) && qv.Count > 0)
+            return qv.Select(s => s.ToLong()).Where(id => id > 0).ToArray();
+        if (Request.HasFormContentType && Request.Form.TryGetValue("attachmentIds", out var fv) && fv.Count > 0)
+            return fv.Select(s => s.ToLong()).Where(id => id > 0).ToArray();
+        return [];
+    }
+
+    /// <summary>将通过独立上传的临时附件绑定到已保存主记录。补写 Key/Title/Url 字段</summary>
+    /// <param name="entity">主记录实体，需已保存并持有主键</param>
+    /// <returns></returns>
+    protected virtual Task BindAttachments(TEntity entity)
+    {
+        var ids = GetAttachmentIds();
+        if (ids == null || ids.Length == 0) return Task.CompletedTask;
+
+        var uid = Factory.Unique != null ? entity[Factory.Unique] : null;
+        if (uid == null) return Task.CompletedTask;
+
+        var key = uid + "";
+        var title = entity + "";
+        var ss = GetControllerAction();
+        var url = $"/{ss[0]}/{ss[1]}?id={key}";
+
+        foreach (var attId in ids)
+        {
+            var att = Attachment.FindById(attId);
+            if (att == null) continue;
+
+            att.Key = key;
+            if (!title.IsNullOrEmpty()) att.Title = title;
+            if (att.Url.IsNullOrEmpty()) att.Url = url;
+            att.Update();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>保存所有上传文件，并保存附件访问路径到实体对象的对应属性</summary>
+    /// <param name="entity">实体对象</param>
+    /// <param name="uploadPath">上传目录。为空时默认UploadPath配置</param>
+    /// <returns></returns>
+    protected virtual async Task<IList<String>> SaveFiles(TEntity entity, String uploadPath = null)
+    {
+        var rs = new List<String>();
+        var list = new List<String>();
+
+        if (!Request.HasFormContentType) return list;
+
+        var files = Request.Form.Files;
+        var fields = Factory.Fields;
+        foreach (var fi in fields)
+        {
+            var dc = fi.Field;
+            if (dc.IsAttachment())
+            {
+                // 允许一次性上传多个文件到服务端
+                foreach (var file in files)
+                {
+                    if (file.Name.EqualIgnoreCase(fi.Name, fi.Name + "_attachment"))
+                    {
+                        var att = await SaveFile(entity, file, uploadPath, null);
+                        if (att != null)
+                        {
+                            var url = ViewHelper.GetAttachmentUrl(att);
+                            list.Add(url);
+                            rs.Add(url);
+                        }
+                    }
+                }
+
+                if (list.Count > 0)
+                {
+                    entity.SetItem(fi.Name, list.Join(";"));
+                    list.Clear();
+                }
+            }
+        }
+
+        return rs;
+    }
+
+    /// <summary>保存单个文件。新建附件</summary>
+    /// <param name="entity">实体对象。读取主键与标题，不修改实体对象</param>
+    /// <param name="file">文件</param>
+    /// <param name="uploadPath">上传目录，默认使用UploadPath配置</param>
+    /// <param name="fileName">文件名，如若指定则忽略前面的目录</param>
+    /// <returns>已保存的附件实体</returns>
+    protected virtual async Task<Attachment> SaveFile(TEntity entity, IFormFile file, String uploadPath, String fileName)
+    {
+        if (file == null) throw new ArgumentNullException(nameof(file));
+        if (fileName.IsNullOrEmpty()) fileName = file.FileName;
+
+        using var span = DefaultTracer.Instance?.NewSpan(nameof(SaveFile), new { name = file.Name, fileName, uploadPath });
+
+        var id = Factory.Unique != null ? entity[Factory.Unique] : null;
+        var att = new Attachment
+        {
+            Category = typeof(TEntity).Name,
+            Key = id + "",
+            Title = entity + "",
+            //FileName = fileName ?? file.FileName,
+            ContentType = file.ContentType,
+            Size = file.Length,
+            Enable = true,
+            UploadTime = DateTime.Now,
+        };
+
+        if (id != null)
+        {
+            var ss = GetControllerAction();
+            att.Url = $"/{ss[0]}/{ss[1]}?id={id}";
+        }
+
+        var rs = false;
+        var msg = "";
+        try
+        {
+            // 上传流使用完毕后立即释放，避免文件句柄泄漏；保存完成后回调与上传流无关
+            {
+                using var stream = file.OpenReadStream();
+                rs = await att.SaveFile(stream, uploadPath, fileName);
+            }
+
+            // 保存完成后回调。默认广播附件；子类可重载，在广播前执行额外处理（如向压缩包注入配置）
+            await OnFileSaved(entity, att, uploadPath, file);
+        }
+        catch (Exception ex)
+        {
+            rs = false;
+            msg = ex.Message;
+            span?.SetError(ex, att);
+
+            throw;
+        }
+        finally
+        {
+            // 写日志
+            var type = entity.GetType();
+            var log = LogProvider.Provider.CreateLog(type, "上传", rs, $"上传 {file.FileName} ，目录 {uploadPath} ，保存为 {att.FilePath} " + msg, 0, null, UserHost);
+            log.LinkID = id.ToLong();
+            log.SaveAsync();
+        }
+
+        return att;
+    }
+
+    /// <summary>保存文件完成后回调。默认广播附件到分布式存储；子类可重载，在广播前执行额外处理</summary>
+    /// <param name="entity">实体对象</param>
+    /// <param name="att">附件实体</param>
+    /// <param name="uploadPath">上传目录</param>
+    /// <param name="file">上传文件</param>
+    /// <returns></returns>
+    protected virtual async Task OnFileSaved(TEntity entity, Attachment att, String uploadPath, IFormFile file)
+    {
+        // 广播指定附件在当前节点可用
+        var fileStorage = HttpContext.RequestServices.GetService<IFileStorage>();
+        if (fileStorage != null)
+        {
+            // 忽略异常
+            try
+            {
+                await fileStorage.PublishNewFileAsync(att.Id, att.FilePath, HttpContext.RequestAborted);
+            }
+            catch (Exception ex2)
+            {
+                DefaultSpan.Current?.SetError(ex2);
+            }
+        }
     }
     #endregion
 }

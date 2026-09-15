@@ -1,40 +1,46 @@
 ﻿using NewLife.Collections;
+using NewLife.Cube.Enums;
 using XCode.Membership;
 
 namespace NewLife.Cube.Areas.Admin.Models;
 
-/// <summary>
-/// 继承此接口，可通过json方式传值
-/// </summary>
-public interface ICubeModel
-{
+/// <summary> 继承此接口，可通过json方式传值 </summary>
+public interface ICubeModel { }
 
-}
-
-/// <summary>
-/// 登录模型
-/// </summary>
+/// <summary> 登录模型 </summary>
 public class LoginModel : ICubeModel
-{
-    /// <summary>
-    /// 登录用户名
-    /// </summary>
+{ 
+    /// <summary>登录类型</summary>
+    public AuthCategory Category { get; set; } = AuthCategory.Password;
+
+
+    /// <summary> 登录用户名、手机号码、邮箱 </summary>
     public String Username { get; set; }
 
-    /// <summary>
-    /// 密码
-    /// </summary>
+    /// <summary> 密码 </summary>
     public String Password { get; set; }
 
-    /// <summary>
-    /// 记住登录状态
-    /// </summary>
+    /// <summary> 记住登录状态 </summary>
     public Boolean Remember { get; set; }
 
-    /// <summary>
-    /// 秘钥key
-    /// </summary>
-    public String Pkey { get; set; }
+    /// <summary> 挑战标识。调用 /Auth/Challenge 获取，登录时原样回传；仅当关闭明文密码时必填 </summary>
+    /// <remarks>
+    /// 必须声明为可空：项目开启 Nullable 标注时，MVC 会把无默认值的非空引用类型属性隐式推断为 [Required]，
+    /// 导致仅在需要验证码/挑战时才使用的可选字段被当成必填，明文密码登录被误拦
+    /// （症状：登录报 "The CaptchaId field is required." 等字段错误）。
+    /// 真实必填校验由服务层按 CubeSetting 配置执行。参见 API 版同名模型（已按此修复）。
+    /// </remarks>
+    public String? ChallengeId { get; set; }
+
+    /// <summary> 兼容旧版字段，建议改用 ChallengeId </summary>
+    [Obsolete("Use ChallengeId instead")]
+    public String? Pkey { get => ChallengeId; set => ChallengeId = value; }
+
+    /// <summary>图片验证码ID。调用 /Auth/Captcha 获取；仅在登录场景需要验证码时必填</summary>
+    public String? CaptchaId { get; set; }
+
+    /// <summary>图片验证码答案。仅在登录场景需要验证码时必填</summary>
+    public String? CaptchaCode { get; set; }
 }
 
 
@@ -45,6 +51,11 @@ public class RegisterModel : ICubeModel
     /// 电子邮箱
     /// </summary>
     public String Email { get; set; }
+
+    /// <summary>
+    /// 手机号
+    /// </summary>
+    public String Mobile { get; set; }
 
     /// <summary>
     /// 用户名
@@ -62,9 +73,84 @@ public class RegisterModel : ICubeModel
     public String Password2 { get; set; }
 }
 
-/// <summary>
-/// 用户信息
-/// </summary>
+/// <summary>统一认证注册模型</summary>
+public class AuthRegisterModel : ICubeModel
+{
+    /// <summary>注册类型</summary>
+    public AuthCategory Category { get; set; } = AuthCategory.Password;
+
+    /// <summary>用户名</summary>
+    public String Username { get; set; }
+
+    /// <summary>邮箱</summary>
+    public String Email { get; set; }
+
+    /// <summary>手机号</summary>
+    public String Mobile { get; set; }
+
+    /// <summary>密码</summary>
+    public String Password { get; set; }
+
+    /// <summary>确认密码</summary>
+    public String ConfirmPassword { get; set; }
+
+    /// <summary>验证码（手机/邮箱注册时必填）</summary>
+    public String Code { get; set; }
+
+    /// <summary>OAuth 临时令牌（OAuthBind 时必填）</summary>
+    public String OAuthToken { get; set; }
+
+    /// <summary>图片验证码ID。调用 /Auth/Captcha 获取；仅在注册场景需要验证码时必填</summary>
+    /// <remarks>可空声明以避免 MVC 隐式 Required 误拦，原因同登录模型</remarks>
+    public String? CaptchaId { get; set; }
+
+    /// <summary>图片验证码答案。仅在注册场景需要验证码时必填</summary>
+    public String? CaptchaCode { get; set; }
+
+    /// <summary>兼容旧版字段，建议改用 ConfirmPassword</summary>
+    [Obsolete("Use ConfirmPassword instead")]
+    public String Password2 { get => ConfirmPassword; set => ConfirmPassword = value; }
+}
+
+/// <summary>OAuth回跳待注册信息</summary>
+public class OAuthPendingInfoModel : ICubeModel
+{
+    /// <summary>提供者名称</summary>
+    public String Provider { get; set; }
+
+    /// <summary>建议用户名</summary>
+    public String Username { get; set; }
+
+    /// <summary>邮箱</summary>
+    public String Email { get; set; }
+
+    /// <summary>手机号</summary>
+    public String Mobile { get; set; }
+
+    /// <summary>头像</summary>
+    public String Avatar { get; set; }
+}
+
+/// <summary>重置密码模型</summary>
+public class ResetPwdModel : ICubeModel
+{
+    /// <summary> 用户名/手机号 </summary>
+    public String Username { get; set; }
+
+    /// <summary> 验证码 </summary>
+    public String Code { get; set; }
+
+    /// <summary> 新密码 </summary>
+    public String NewPassword { get; set; }
+
+    /// <summary> 确认密码 </summary>
+    public String ConfirmPassword { get; set; }
+
+    /// <summary>挑战标识</summary>
+    public String ChallengeId { get; set; }
+}
+
+/// <summary> 用户信息 </summary>
 public class UserInfo
 {
     /// <summary>

@@ -23,6 +23,12 @@
     var ver = typeof(ControllerBaseX).Assembly.GetName().Version;
 
     var dbclickEnable = pageSetting.EnableTableDoubleClick;
+
+    // 表格分隔样式与行高密度：规范化配置值（空值/非法值回退默认），输出为 body class 供 ace-ui.css 消费
+    var tableStyle = set.TableStyle;
+    if (!tableStyle.EqualIgnoreCase("Light", "Standard", "Grid")) tableStyle = "Standard";
+    var tableDensity = set.TableDensity;
+    if (!tableDensity.EqualIgnoreCase("Compact", "Normal")) tableDensity = "Compact";
 }
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -61,6 +67,9 @@
     <!-- 自定义样式 -->
     <link rel="stylesheet" href="@res/Cube.css?v=@ver">
 
+    <!-- ACE 主题现代化样式 -->
+    <link rel="stylesheet" href="@res/ace-ui.css?v=@ver">
+
     <!-- 页面内联样式 -->
     @RenderSection("css", required: false)
 
@@ -79,29 +88,29 @@
         }
     }
 </head>
-<body>
+<body class="cube-table-@tableStyle.ToLower() cube-density-@tableDensity.ToLower()">
     <div class="panel panel-default">
-        @if (pageSetting.EnableNavbar)
-        {
-            var remark = (String)@ViewBag.HeaderContent;
-            <div class="breadcrumbs" id="breadcrumbs">
-                <ul class="breadcrumb">
-                    @await Html.PartialAsync("_Layout_Nav")
-                </ul>
-                <div class="hidden-xs" style="float: right; margin-left: 40px;max-width:1000px;overflow:hidden;white-space: nowrap;text-overflow: ellipsis;" title="@remark">
-                    @if (menu != null && !menu.Ex4.IsNullOrEmpty() && menu.Ex4.StartsWithIgnoreCase("http://", "https://"))
-                    {
-                        <a href="@(menu.Ex4)" target="_blank">@remark</a>
-                    }
-                    else
-                    {
-                        <text>@remark</text>
-                    }
-                </div>
-            </div>
-        }
         <div class="page-content">
             <section class="content-wrapper main-content clear-fix">
+                @if (pageSetting.EnableNavbar)
+                {
+                    var remark = (String)@ViewBag.HeaderContent;
+                    <div class="breadcrumbs" id="breadcrumbs">
+                        <ul class="breadcrumb">
+                            @await Html.PartialAsync("_Layout_Nav")
+                        </ul>
+                        <div class="hidden-xs" style="float: right; margin-left: 40px;max-width:1000px;overflow:hidden;white-space: nowrap;text-overflow: ellipsis;" title="@remark">
+                            @if (menu != null && !menu.Ex4.IsNullOrEmpty() && menu.Ex4.StartsWithIgnoreCase("http://", "https://"))
+                            {
+                                <a href="@(menu.Ex4)" target="_blank">@remark</a>
+                            }
+                            else
+                            {
+                                <text>@remark</text>
+                            }
+                        </div>
+                    </div>
+                }
                 @RenderBody()
             </section>
         </div>
@@ -242,5 +251,8 @@
     <script src="@res/artDialog/dist/dialog.newlife.js"></script>
     @*模态窗Ajax删除提示*@
     <script src="@res/Cube.js?v=@ver"></script>
+
+    @* AI 助手浮窗 *@
+    @await Html.PartialAsync("_AiAssistant")
 </body>
 </html>

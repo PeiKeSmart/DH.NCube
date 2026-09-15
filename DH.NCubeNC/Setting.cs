@@ -20,6 +20,21 @@ public class CubeSetting : Config<CubeSetting>
     #region 静态
     /// <summary>指向数据库参数字典表</summary>
     static CubeSetting() => Provider = new DbConfigProvider { UserId = 0, Category = "Cube" };
+
+    /// <summary>AI 助手主题色方案。键为方案名，值为"主色,辅色"，首个为默认方案</summary>
+    public static IDictionary<String, String> ColorSchemes { get; } = new Dictionary<String, String>
+    {
+        ["新生命绿"] = "#2ecc71,#1e8e3e",
+        ["靛蓝紫"] = "#667eea,#764ba2",
+        ["翠绿"] = "#10b981,#059669",
+        ["天青蓝"] = "#0ea5e9,#0369a1",
+        ["湖青"] = "#06b6d4,#0e7490",
+        ["琥珀橙"] = "#f59e0b,#ea580c",
+        ["玫瑰红"] = "#f43f5e,#be123c",
+        ["藤萝紫"] = "#8b5cf6,#6d28d9",
+        ["樱花粉"] = "#f472b6,#db2777",
+        ["石墨黑"] = "#475569,#0f172a",
+    };
     #endregion
 
     #region 通用
@@ -38,6 +53,11 @@ public class CubeSetting : Config<CubeSetting>
     [Category("通用")]
     public String AvatarPath { get; set; } = "Avatars";
 
+    /// <summary>文字头像字符数。头像不存在时自动生成SVG文字头像，可选1或2个字符。中文取末尾N字，英文取各单词首字母。默认1</summary>
+    [Description("文字头像字符数。头像不存在时自动生成SVG文字头像，可选1或2个字符。中文取末尾N字，英文取各单词首字母。默认1")]
+    [Category("通用")]
+    public Int32 AvatarChars { get; set; } = 2;
+
     /// <summary>上传目录。默认Uploads</summary>
     [Description("上传目录。默认Uploads")]
     [Category("通用")]
@@ -53,10 +73,23 @@ public class CubeSetting : Config<CubeSetting>
     [Category("通用")]
     public String ResourceUrl { get; set; }
 
+    /// <summary>获取 Mermaid 图表库地址。配置 ResourceUrl 时使用自建 CDN（与 echarts 同约定 /mermaid/mermaid.min.js），否则使用公共 CDN（npmmirror，国内访问稳定）</summary>
+    /// <returns>Mermaid 脚本完整地址</returns>
+    public String GetMermaidUrl()
+    {
+        var res = ResourceUrl;
+        if (!String.IsNullOrEmpty(res)) return res.TrimEnd('/') + "/mermaid/mermaid.min.js";
+
+        return "https://registry.npmmirror.com/mermaid/11.12.3/files/dist/mermaid.min.js";
+    }
+
     /// <summary>跨域来源。允许其它源访问当前域，指定其它源http地址，*表示任意域</summary>
     [Description("跨域来源。允许其它源访问当前域，指定其它源http地址，*表示任意域")]
     [Category("通用")]
     public String CorsOrigins { get; set; }
+#if DEBUG
+        = "*";
+#endif
 
     /// <summary>在iframe中展示。SAMEORIGIN-允许相同域名，ALLOWALL-允许任何域名</summary>
     [Description("在iframe中展示。默认为空-只允许相同域名，SAMEORIGIN-允许相同域名和端口，ALLOWALL-允许任何域名")]
@@ -94,6 +127,33 @@ public class CubeSetting : Config<CubeSetting>
     public String ForceRedirect { get; set; }
     #endregion
 
+    #region 安全防御
+    /// <summary>安全防御模式。0=关闭，1=观察模式仅记录，2=拦截模式，3=自动模式（默认；观察为主，连续攻击自动封禁，大范围攻击临时拦截并自动回落）</summary>
+    [Description("安全防御模式。0=关闭，1=观察模式仅记录，2=拦截模式，3=自动模式（默认；观察为主，连续攻击自动封禁，大范围攻击临时拦截并自动回落）")]
+    [Category("安全")]
+    public Int32 SecurityMode { get; set; } = 3;
+
+    /// <summary>自动封禁时长档位。逗号分隔秒数，按触发次数递增；空值使用默认档位 60,300,1800,7200,86400</summary>
+    [Description("自动封禁时长档位。逗号分隔秒数，按触发次数递增；空值使用默认档位 60,300,1800,7200,86400")]
+    [Category("安全")]
+    public String BlockDurations { get; set; }
+
+    /// <summary>可信代理。来自这些代理的转发头才被信任，逗号分隔IP或CIDR网段；空值兼容旧行为信任全部转发头</summary>
+    [Description("可信代理。来自这些代理的转发头才被信任，逗号分隔IP或CIDR网段；空值兼容旧行为信任全部转发头")]
+    [Category("安全")]
+    public String TrustedProxies { get; set; }
+
+    /// <summary>可信代理自动学习数量。可信代理未配置时，自动学习携带转发头的内网直连来源（反向代理/负载均衡入口），最多学习该数量，0=不学习</summary>
+    [Description("可信代理自动学习数量。可信代理未配置时，自动学习携带转发头的内网直连来源，最多学习该数量，0=不学习（单机房主备一般2，双机房一般4）")]
+    [Category("安全")]
+    public Int32 TrustedProxyLearning { get; set; } = 4;
+
+    /// <summary>已学习代理。由系统自动维护，可信代理为空时参与链解析；清空可重置学习结果</summary>
+    [Description("已学习代理。由系统自动维护，清空可重置学习结果")]
+    [Category("安全")]
+    public String LearnedProxies { get; set; }
+    #endregion
+
     #region 用户登录
     /// <summary>默认角色。默认普通用户</summary>
     [Description("默认角色。默认普通用户")]
@@ -104,6 +164,11 @@ public class CubeSetting : Config<CubeSetting>
     [Description("允许密码登录。允许输入用户名密码进行登录")]
     [Category("用户登录")]
     public Boolean AllowLogin { get; set; } = true;
+
+    /// <summary>允许明文密码。默认true，兼容旧版客户端；设为false后强制要求前端通过 Challenge-Response 加密密码传输</summary>
+    [Description("允许明文密码。默认true，兼容旧版客户端；设为false后强制要求前端通过 Challenge-Response 加密密码传输")]
+    [Category("用户登录")]
+    public Boolean AllowPlainPassword { get; set; } = true;
 
     /// <summary>允许注册。允许输入用户名密码进行注册</summary>
     [Description("允许注册。允许输入用户名密码进行注册")]
@@ -125,6 +190,11 @@ public class CubeSetting : Config<CubeSetting>
     [Category("用户登录")]
     public String PaswordStrength { get; set; } = @"^(?=.*\d.*)(?=.*[a-z].*)(?=.*[A-Z].*)(?=.*[^(0-9a-zA-Z)].*).{8,32}$";
 
+    /// <summary>复杂密码校验。启用后登录页校验密码复杂度（按密码强度），禁用后登录页仅要求密码非空，默认true</summary>
+    [Description("复杂密码校验。启用后登录页校验密码复杂度（按密码强度），禁用后登录页仅要求密码非空，默认true")]
+    [Category("用户登录")]
+    public Boolean EnablePasswordComplexity { get; set; } = true;
+
     /// <summary>登录失败次数。短时间内，相同用户或IP地址连续登录错误次数达到该值后禁止登录，默认5</summary>
     [Description("登录失败次数。短时间内，相同用户或IP地址连续登录错误次数达到该值后禁止登录，默认5")]
     [Category("用户登录")]
@@ -134,6 +204,16 @@ public class CubeSetting : Config<CubeSetting>
     [Description("登录封禁时间。触发风控禁止登录后的禁止时间，默认300秒")]
     [Category("用户登录")]
     public Int32 LoginForbiddenTime { get; set; } = 300;
+
+    /// <summary>三段IP封禁阈值。三段IP（如103.125.146.*）连续登录失败次数达到该值后封禁该IP段，默认10，0表示不启用</summary>
+    [Description("三段IP封禁阈值。三段IP（如103.125.146.*）连续登录失败次数达到该值后封禁该IP段，默认10，0表示不启用")]
+    [Category("用户登录")]
+    public Int32 MaxLoginErrorBySubnet24 { get; set; } = 10;
+
+    /// <summary>两段IP封禁阈值。两段IP（如103.125.*.*）连续登录失败次数达到该值后封禁该IP段，默认20，0表示不启用</summary>
+    [Description("两段IP封禁阈值。两段IP（如103.125.*.*）连续登录失败次数达到该值后封禁该IP段，默认20，0表示不启用")]
+    [Category("用户登录")]
+    public Int32 MaxLoginErrorBySubnet16 { get; set; } = 20;
 
     /// <summary>强行绑定用户名。根据SSO用户名强制绑定本地同名用户，而不需要增加提供者前缀，一般用于用户中心</summary>
     [Description("强行绑定用户名。根据SSO用户名强制绑定本地同名用户，而不需要增加提供者前缀，一般用于用户中心")]
@@ -175,15 +255,30 @@ public class CubeSetting : Config<CubeSetting>
     [Category("用户登录")]
     public Boolean UseSsoDepartment { get; set; } = true;
 
+    /// <summary>SSO角色规则。SSO登录后按规则自动升级用户主角色，多条规则用逗号（半角或全角）分隔。格式：原角色+部门通配符=目标角色，部门通配符支持前缀(路由*)、后缀(*专员)、精确匹配。例如：游客+路由*=路由专员,普通用户+*车队=调度员</summary>
+    [Description("SSO角色规则。SSO登录后按规则自动升级用户主角色，多条规则用逗号（半角或全角）分隔。格式：原角色+部门通配符=目标角色，例如：游客+路由*=路由专员,普通用户+*车队=调度员")]
+    [Category("用户登录")]
+    public String RoleRules { get; set; }
+
     /// <summary>注销所有系统。false仅注销本系统，默认true时注销SsoServer</summary>
     [Description("注销所有系统。false仅注销本系统，默认true时注销SsoServer")]
     [Category("用户登录")]
     public Boolean LogoutAll { get; set; } = true;
 
+    /// <summary>允许多设备登录。false时同一账号新登录会踢掉旧设备，注销时吊销该账号所有令牌；true时仅吊销当前会话令牌，默认true</summary>
+    [Description("允许多设备登录。false时同一账号新登录会踢掉旧设备，注销时吊销该账号所有令牌；true时仅吊销当前会话令牌，默认true")]
+    [Category("用户登录")]
+    public Boolean EnableMultiDeviceLogin { get; set; } = true;
+
     /// <summary>会话超时。单点登录后会话超时时间，该时间内可借助Cookie登录，默认0s</summary>
     [Description("会话超时。单点登录后会话超时时间，该时间内可借助Cookie登录，默认0s")]
     [Category("用户登录")]
     public Int32 SessionTimeout { get; set; } = 0;
+
+    /// <summary>令牌滑动刷新阈值。JWT剩余有效期低于该秒数时在TryLogin中自动刷新令牌并写入Cookie，0表示禁用滑动过期</summary>
+    [Description("令牌滑动刷新阈值。JWT剩余有效期低于该秒数时在TryLogin中自动刷新令牌并写入Cookie，0表示禁用滑动过期")]
+    [Category("用户登录")]
+    public Int32 TokenRefreshThreshold { get; set; } = 900;
 
     /// <summary>刷新用户周期。该周期内多次SSO登录只拉取一次用户信息，默认600秒</summary>
     [Description("刷新用户周期。该周期内多次SSO登录只拉取一次用户信息，默认600秒")]
@@ -209,6 +304,26 @@ public class CubeSetting : Config<CubeSetting>
     [Description("验证附件访问。访问附件时，是否验证登录状态，默认true")]
     [Category("用户登录")]
     public Boolean ValidateAttachment { get; set; } = true;
+
+    /// <summary>公开附件分类。无需登录即可访问的附件分类，多个用逗号分隔，如 markdown,avatar。ValidateAttachment=true时生效</summary>
+    [Description("公开附件分类。无需登录即可访问的附件分类，多个用逗号分隔，如 markdown,avatar。ValidateAttachment=true时生效")]
+    [Category("用户登录")]
+    public String PublicAttachmentCategories { get; set; }
+
+    /// <summary>私有附件分类。仅上传人本人可访问的附件分类，多个用逗号分隔。ValidateAttachment=true时生效</summary>
+    [Description("私有附件分类。仅上传人本人可访问的附件分类，多个用逗号分隔。ValidateAttachment=true时生效")]
+    [Category("用户登录")]
+    public String OwnerOnlyAttachmentCategories { get; set; }
+
+    /// <summary>SSO跨域重定向白名单。登录后允许携带JWT Token重定向的目标域名，逗号分隔，支持通配符前缀*.company.com。留空=仅允许同站重定向，拒绝所有跨域跳转以防止凭据泄露</summary>
+    [Description("SSO跨域重定向白名单。登录后允许携带JWT Token重定向的目标域名，逗号分隔，支持通配符前缀*.company.com。留空=仅允许同站，跨域不在白名单则拒绝并跳回首页")]
+    [Category("用户登录")]
+    public String SsoSafeDomains { get; set; }
+
+    /// <summary>外部验证地址。配置后，本地验证失败时调用外部接口验证用户名密码，成功则自动创建/更新本地用户并登录。POST格式：{"username":"...","password":"..."}，响应：{"code":0,"data":{"username":"...","displayName":"...","mail":"...","mobile":"...","roleName":"...","avatar":"..."}}</summary>
+    [Description("外部验证地址。配置后，本地验证失败时调用外部接口验证用户名密码，成功则自动创建/更新本地用户并登录")]
+    [Category("用户登录")]
+    public String ExternalAuthUrl { get; set; }
     #endregion
 
     #region 界面配置
@@ -236,6 +351,16 @@ public class CubeSetting : Config<CubeSetting>
     [Description("登录提示。留空表示不显示登录提示信息")]
     [Category("界面配置")]
     public String LoginTip { get; set; }
+
+    /// <summary>登录页Logo。留空时使用默认Logo</summary>
+    [Description("登录页Logo。留空时使用默认Logo")]
+    [Category("界面配置")]
+    public String LoginLogo { get; set; }
+
+    /// <summary>登录页背景图。留空时使用默认背景，可填写图片URL</summary>
+    [Description("登录页背景图。留空时使用默认背景，可填写图片URL")]
+    [Category("界面配置")]
+    public String LoginBackground { get; set; }
 
     /// <summary>表单组样式。大中小屏幕分别3/2/1列</summary>
     [Description("表单组样式。大中小屏幕分别3/2/1列，form-group col-xs-12 col-sm-6 col-lg-4")]
@@ -282,10 +407,82 @@ public class CubeSetting : Config<CubeSetting>
     [Category("界面配置")]
     public Boolean EnableTableDoubleClick { get; set; } = true;
 
+    /// <summary>表格分隔样式。列表页数据表格的分隔风格：Light-轻量、Standard-标准（默认）、Grid-网格</summary>
+    [Description("表格分隔样式。Light-轻量（极简浅线）、Standard-标准（清晰行线，默认）、Grid-网格（完整单元格边框）")]
+    [Category("界面配置")]
+    public String TableStyle { get; set; } = "Standard";
+
+    /// <summary>表格行高密度。列表页数据表格的行高：Compact-紧凑（默认）、Normal-适中</summary>
+    [Description("表格行高密度。Compact-紧凑（默认，信息量大）、Normal-适中（呼吸感强）")]
+    [Category("界面配置")]
+    public String TableDensity { get; set; } = "Compact";
+
     /// <summary>星尘Web。星尘控制台地址，支持直达调用链 /trace?id={traceId} 或 /graph?id={traceId}</summary>
     [Description("星尘Web。星尘控制台地址，支持直达调用链 /trace?id={traceId} 或 /graph?id={traceId}")]
     [Category("界面配置")]
     public String StarWeb { get; set; }
+    #endregion
+
+    #region AI
+    /// <summary>AI 总开关。启用后可使用日志分析、通知润色等 AI 辅助功能，默认false</summary>
+    [Description("AI 总开关。启用后可使用日志分析、通知润色等 AI 辅助功能，默认false")]
+    [Category("AI")]
+    public Boolean AISwitch { get; set; }
+
+    /// <summary>AI 服务商。支持 NewLife / Ollama / DeepSeek / DashScope / OpenAI 等，默认NewLife</summary>
+    [Description("AI 服务商。支持 NewLife / Ollama / DeepSeek / DashScope / OpenAI 等，默认NewLife")]
+    [Category("AI")]
+    public String AIProvider { get; set; } = "NewLifeAI";
+
+    /// <summary>AI 服务地址。NewLife 默认 https://ai.newlifex.com</summary>
+    [Description("AI 服务地址。NewLife 默认 https://ai.newlifex.com")]
+    [Category("AI")]
+    public String AIEndpoint { get; set; } = "https://ai.newlifex.com";
+
+    /// <summary>AI ApiKey。NewLife 默认 sk-CubeAI2026</summary>
+    [Description("AI ApiKey。NewLife 默认 sk-CubeAI2026")]
+    [Category("AI")]
+    public String AIApiKey { get; set; } = "sk-CubeAI2026";
+
+    /// <summary>AI 默认模型。NewLife 默认 newlife-flash</summary>
+    [Description("AI 默认模型。NewLife 默认 newlife-flash")]
+    [Category("AI")]
+    public String AIModel { get; set; } = "newlife-flash";
+
+    /// <summary>AI 默认深度推理。AI 分析与对话默认是否启用深度推理（think），默认false即快速</summary>
+    [Description("AI 默认深度推理。AI 分析与对话默认是否启用深度推理（think），默认false即快速")]
+    [Category("AI")]
+    public Boolean AIDefaultThink { get; set; }
+
+    /// <summary>AI 助手主题色方案。预设方案联动填充主色/辅色，可再手动微调，默认新生命绿</summary>
+    [Description("AI 助手主题色方案。预设方案联动填充主色/辅色，可再手动微调，默认新生命绿")]
+    [Category("AI")]
+    public String AIColorScheme { get; set; } = "新生命绿";
+
+    /// <summary>AI 助手主色。悬浮球、面板头、用户气泡等主色调，默认新生命绿#2ecc71</summary>
+    [Description("AI 助手主色。悬浮球、面板头、用户气泡等主色调，默认新生命绿#2ecc71")]
+    [Category("AI")]
+    public String AIPrimaryColor { get; set; } = "#2ecc71";
+
+    /// <summary>AI 助手辅色。主色渐变终点色，默认深绿#1e8e3e</summary>
+    [Description("AI 助手辅色。主色渐变终点色，默认深绿#1e8e3e")]
+    [Category("AI")]
+    public String AISecondaryColor { get; set; } = "#1e8e3e";
+
+    /// <summary>主题方案联动填充主色/辅色。方案与旧值不同时采用新方案颜色，否则保留手动微调</summary>
+    /// <param name="oldScheme">原主题色方案</param>
+    public void ApplyColorScheme(String oldScheme)
+    {
+        if (String.IsNullOrEmpty(AIColorScheme) || AIColorScheme == oldScheme) return;
+        if (!ColorSchemes.TryGetValue(AIColorScheme, out var colors)) return;
+
+        var parts = colors.Split(',');
+        if (parts.Length >= 2)
+        {
+            AIPrimaryColor = parts[0].Trim();
+            AISecondaryColor = parts[1].Trim();
+        }
+    }
     #endregion
 
     #region 系统功能
@@ -294,10 +491,25 @@ public class CubeSetting : Config<CubeSetting>
     [Category("系统功能")]
     public Boolean EnableOAuthServer { get; set; } = true;
 
+    /// <summary>文件管理。是否启用后台文件管理，可浏览/上传/下载/删除站点内文件，存在安全风险，默认false</summary>
+    [Description("文件管理。是否启用后台文件管理，可浏览/上传/下载/删除站点内文件，存在安全风险")]
+    [Category("系统功能")]
+    public Boolean EnableFileManager { get; set; }
+
     /// <summary>多租户。是否支持多租户，租户模式禁止访问系统管理，平台管理模式禁止访问租户页面</summary>
     [Description("多租户。是否支持多租户，租户模式禁止访问系统管理，平台管理模式禁止访问租户页面")]
     [Category("系统功能")]
     public Boolean EnableTenant { get; set; }
+
+    /// <summary>多租户强制模式。Shadow=兼容观察期（旧客户端无租户标识放行并记录影子日志，过渡期使用，后期移除），Enforce=严格执行fail-closed。默认Shadow</summary>
+    [Description("多租户强制模式。Shadow=兼容观察期（旧客户端无租户标识放行并记录影子日志，过渡期使用，后期移除），Enforce=严格执行fail-closed")]
+    [Category("系统功能")]
+    public TenantEnforceModes TenantEnforceMode { get; set; } = TenantEnforceModes.Shadow;
+
+    /// <summary>多租户查询策略。DenyWithEmpty=无租户上下文返回空集（fail-closed），ThrowOnMissingTenant=显式抛错。默认DenyWithEmpty</summary>
+    [Description("多租户查询策略。DenyWithEmpty=无租户上下文返回空集，ThrowOnMissingTenant=显式抛错")]
+    [Category("系统功能")]
+    public TenantQueryPolicies TenantQueryPolicy { get; set; } = TenantQueryPolicies.DenyWithEmpty;
 
     /// <summary>用户在线。是否记录用户在线信息，0表示不记录，1表示仅记录已登录用户，2表示记录所有访客。默认2</summary>
     [Description("用户在线。是否记录用户在线信息，0表示不记录，1表示仅记录已登录用户，2表示记录所有访客。默认2")]
@@ -308,6 +520,96 @@ public class CubeSetting : Config<CubeSetting>
     [Description("用户统计。是否统计用户访问，默认true")]
     [Category("系统功能")]
     public Boolean EnableUserStat { get; set; } = true;
+
+    /// <summary>启用短信。包括短信验证码和系统通知，默认false</summary>
+    [Description("启用短信。包括短信验证码和系统通知，默认false")]
+    [Category("系统功能")]
+    public Boolean EnableSms { get; set; }
+
+    /// <summary>启用邮件。包括邮件验证码和系统通知，默认false</summary>
+    [Description("启用邮件。包括邮件验证码和系统通知，默认false")]
+    [Category("系统功能")]
+    public Boolean EnableMail { get; set; }
+
+    /// <summary>需要邮箱验证。注册后必须激活邮箱才能登录，注册时必须提供邮箱，默认false</summary>
+    [Description("需要邮箱验证。注册后必须激活邮箱才能登录，注册时必须提供邮箱，默认false")]
+    [Category("系统功能")]
+    public Boolean RequireMailVerify { get; set; }
+
+    /// <summary>需要手机验证。注册后必须激活手机才能登录，注册时必须提供手机，默认false</summary>
+    [Description("需要手机验证。注册后必须激活手机才能登录，注册时必须提供手机，默认false")]
+    [Category("系统功能")]
+    public Boolean RequireMobileVerify { get; set; }
+
+    /// <summary>验证码场景。位掩码强制指定需要图片验证码的场景：0=不启用，1=登录，2=注册，4=发验证码（防短信轰炸），可组合，如3=登录+注册均需验证码。该开关为强制要求，不受风险自适应豁免，默认0</summary>
+    [Description("验证码场景。位掩码强制：0=不启用，1=登录，2=注册，4=发验证码（防短信轰炸），可组合，如3=登录+注册均需验证码。强制要求不受自适应豁免，默认0")]
+    [Category("系统功能")]
+    public Int32 CaptchaScene { get; set; }
+
+    /// <summary>风险自适应验证码。自动感知当前请求环境安全度（内网/可信设备/登录失败历史），不安全时即使 CaptchaScene 未覆盖也要求图片验证码，默认true</summary>
+    [Description("风险自适应验证码。自动感知当前机器是否安全，不安全环境要求图片验证码，默认true")]
+    [Category("系统功能")]
+    public Boolean CaptchaRisk { get; set; } = true;
+
+    /// <summary>验证码风险阈值。风险评分达到该值要求验证码：0=内网，1=公网，2=公网+近期登录失败，3=封禁中。默认2</summary>
+    [Description("验证码风险阈值。风险评分达到该值要求验证码：0=内网，1=公网，2=公网+近期登录失败，3=封禁中。默认2")]
+    [Category("系统功能")]
+    public Int32 CaptchaRiskThreshold { get; set; } = 2;
+
+    /// <summary>可信设备有效期。曾成功登录的设备在有效期内免自适应验证码（天），默认30</summary>
+    [Description("可信设备有效期。曾成功登录的设备在有效期内免自适应验证码（天），默认30")]
+    [Category("系统功能")]
+    public Int32 TrustedDeviceDays { get; set; } = 30;
+
+    /// <summary>启用MFA。是否允许用户开启多因素认证（TOTP），增强版功能，默认false</summary>
+    [Description("启用MFA。是否允许用户开启多因素认证（TOTP），增强版功能，默认false")]
+    [Category("系统功能")]
+    public Boolean EnableMfa { get; set; }
+
+    /// <summary>文件存储提供服务。是否响应其他节点的文件下载请求，默认true</summary>
+    [Description("文件存储提供服务。是否响应其他节点的文件下载请求，默认true")]
+    [Category("系统功能")]
+    public Boolean FileStorageProvide { get; set; } = true;
+
+    /// <summary>文件存储拉取文件。是否主动拉取其他节点发布的新文件，默认true</summary>
+    [Description("文件存储拉取文件。是否主动拉取其他节点发布的新文件，默认true")]
+    [Category("系统功能")]
+    public Boolean FileStorageFetch { get; set; } = true;
+
+    /// <summary>文件存储拉取超时。下载本地缺失文件时等待其他节点同步的最大时间（毫秒），默认5000</summary>
+    [Description("文件存储拉取超时。下载本地缺失文件时等待其他节点同步的最大时间（毫秒），默认5000")]
+    [Category("系统功能")]
+    public Int32 FileStorageFetchTimeout { get; set; } = 5_000;
+
+    /// <summary>附件存储类型。Local本地磁盘，Oss阿里云，Cos腾讯云，Qiniu七牛，EasyIO易对象，默认Local</summary>
+    [Description("附件存储类型。Local本地磁盘，Oss阿里云，Cos腾讯云，Qiniu七牛，EasyIO易对象，默认Local")]
+    [Category("系统功能")]
+    public String AttachmentStorage { get; set; } = "Local";
+
+    /// <summary>对象存储服务器。OSS/COS/七牛S3兼容端点，如 oss-cn-beijing.aliyuncs.com</summary>
+    [Description("对象存储服务器。OSS/COS/七牛S3兼容端点，如 oss-cn-beijing.aliyuncs.com")]
+    [Category("系统功能")]
+    public String ObjectStorageServer { get; set; }
+
+    /// <summary>对象存储桶。OSS/COS/七牛存储桶名称</summary>
+    [Description("对象存储桶。OSS/COS/七牛存储桶名称")]
+    [Category("系统功能")]
+    public String ObjectStorageBucket { get; set; }
+
+    /// <summary>对象存储区域。用于S3签名作用域，如 cn-beijing / ap-beijing / cn-east-1</summary>
+    [Description("对象存储区域。用于S3签名作用域，如 cn-beijing / ap-beijing / cn-east-1")]
+    [Category("系统功能")]
+    public String ObjectStorageRegion { get; set; } = "cn-north-1";
+
+    /// <summary>对象存储应用标识。AccessKeyId</summary>
+    [Description("对象存储应用标识。AccessKeyId")]
+    [Category("系统功能")]
+    public String ObjectStorageAppId { get; set; }
+
+    /// <summary>对象存储应用密钥。AccessKeySecret</summary>
+    [Description("对象存储应用密钥。AccessKeySecret")]
+    [Category("系统功能")]
+    public String ObjectStorageSecret { get; set; }
 
     /// <summary>数据保留时间。审计日志与OAuth日志，默认30天</summary>
     [Description("数据保留时间。审计日志与OAuth日志，默认30天")]
@@ -335,6 +637,13 @@ public class CubeSetting : Config<CubeSetting>
     public Int32 MaxBackup { get; set; } = 10_000_000;
     #endregion
 
+    #region API前缀
+    /// <summary>API前缀。多个前缀用逗号或分号分隔，如 /api,/api/v1。请求路径命中前缀时自动去掉前缀并转发到真实路由</summary>
+    [Description("API前缀。多个前缀用逗号或分号分隔，如 /api,/api/v1。请求路径命中前缀时自动去掉前缀并转发到真实路由")]
+    [Category("API前缀")]
+    public String ApiPrefixes { get; set; }
+    #endregion
+
     #region 方法
     /// <summary>实例化</summary>
     public CubeSetting() { }
@@ -342,14 +651,19 @@ public class CubeSetting : Config<CubeSetting>
     /// <summary>加载时触发</summary>
     protected override void OnLoaded()
     {
-        if (StartPage.IsNullOrEmpty()) StartPage = "/Admin/User/Info";
+        if (StartPage.IsNullOrEmpty()) StartPage = "/Admin/Index/Dashboard";
 
         var web = Runtime.IsWeb;
 
         //if (AvatarPath.IsNullOrEmpty()) AvatarPath = web ? "..\\Avatars" : "Avatars";
         if (DefaultRole.IsNullOrEmpty() || DefaultRole == "3") DefaultRole = "普通用户";
 
-        if (JwtSecret.IsNullOrEmpty() || JwtSecret.Split(':').Length != 2) JwtSecret = $"HS256:{Rand.NextString(16)}";
+        if (JwtSecret.IsNullOrEmpty() || JwtSecret.Split(':').Length != 2)
+        {
+            JwtSecret = $"HS256:{Rand.NextString(16)}";
+            // 首次生成后持久化，避免进程重启密钥变化导致已签发令牌全部失效；多实例部署应在配置中显式固定
+            try { Save(); } catch { }
+        }
 
         // 取版权信息
         if (Copyright.IsNullOrEmpty())
@@ -406,7 +720,7 @@ public class CubeSetting : Config<CubeSetting>
 
         var format = "";
         var p2 = cr.IndexOf('}', p1);
-        if (p2 > 0) format = cr.Substring(p1 + 1, p2 - p1 - 1).TrimStart("now").TrimStart(":");
+        if (p2 > 0) format = cr.Substring(p1 + 1, p2 - p1 - 1).TrimPrefix("now").TrimPrefix(":");
 
         var now = DateTime.Now;
         if (format.IsNullOrEmpty())

@@ -1,0 +1,149 @@
+<script setup lang="ts">
+import { onBeforeMount, onMounted, watch, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+// import NotFound from '../pages/404.vue'
+// import Loading from '../pages/loading.vue'
+import { useUserStore } from '../stores/user';
+import { useMenuStore } from '../stores/menu';
+import { useTabsStore } from '../stores/tabs';
+import { getUrlHashToken, getAccessToken } from '../utils/token';
+import { useLayout } from '../composables/useLayout';
+import TabsView from '../components/TabsView.vue';
+import TopMenuLayout from './TopMenu/index.vue'; // 兜底默认布局
+import { getConfig } from '../configure';
+
+const router = useRouter();
+const route = useRoute();
+const userStore = useUserStore();
+const menuStore = useMenuStore();
+const tabsStore = useTabsStore();
+console.log('routes', router.getRoutes());
+
+// 通过 useLayout 获取当前注册的布局组件，无注册时回退到 TopMenuLayout
+const { currentComponent } = useLayout();
+const MainLayout = computed(() => currentComponent.value ?? TopMenuLayout);
+
+// 使用计算属性获取响应式的 meta 对象
+const meta = computed(() => route.meta);
+
+const {
+  auth: { reLoginParams },
+} = getConfig();
+const loginPageUrl = reLoginParams?.loginPageUrl || '/login';
+
+function checkLogin() {
+  const token = getUrlHashToken();
+
+  // 如果token存在，说明UrlHashToken存在，重新路由，确保UrlHashToken消失，否则导航完之后UrlHashToken会存在
+  // 同时路由必须是匹配上了才跳转，否则初始路由默认“/”，就会跳转到“/”而丢失原本路由
+  if (token && route.matched.length > 0) {
+    router.push({ path: route.path, query: route.query });
+  }
+}
+
+// 监听整个路由对象变化
+watch(
+  route,
+  (newRoute, oldRoute) => {
+    console.log('路由变化', {
+      newPath: newRoute.path,
+      oldPath: oldRoute?.path,
+      newMeta: newRoute.meta,
+      oldMeta: oldRoute.meta,
+    });
+    // 路由变化时自动将页面加入标签页
+    // 排除登录页和无布局页面
+    if (
+      newRoute.path !== loginPageUrl &&
+      newRoute.meta?.layout !== false &&
+      newRoute.path !== '/' // 根路径由首页标签单独处理
+    ) {
+      tabsStore.addTab(newRoute);
+    } else if (newRoute.path === '/' || newRoute.path === '/home') {
+      // 首页标签
+      tabsStore.addTab({
+        ...newRoute,
+        meta: { ...newRoute.meta, title: newRoute.meta?.title || '首页' },
+      });
+    }
+  },
+  { deep: true },
+);
+
+onBeforeMount(() => {
+  // 当刷新页面时，导航守卫before还没执行，这里先执行了，因此这里先检查登录情况
+  checkLogin();
+});
+
+onMounted(async () => {
+  // 登录页、loading 页等不需要认证的页面，无需获取用户信息和菜单
+  if (route.path === loginPageUrl || route.meta?.auth === false) {
+    return;
+  }
+  // 未登录时（无 token）不请求用户信息和菜单，避免 401 未授权报错弹窗
+  if (!getAccessToken()) {
+    return;
+  }
+  try {
+    await userStore.fetchUserInfoAsync();
+    await menuStore.fetchMenuAsync();
+  } catch (e) {
+    console.error(e);
+  }
+});
+</script>
+
+<template>
+  <!-- 初始路由未匹配前不渲染布局（START_LOCATION 的 matched 为空数组），避免刷新时短暂显示布局组件 -->
+  <template v-if="route.matched.length === 0">
+    <slot />
+  </template>
+
+  <!-- 如果是登录页面，直接返回 -->
+  <template v-else-if="route.path === loginPageUrl">
+    <slot />
+  </template>
+
+  <!-- 无布局 -->
+  <template v-else-if="meta.layout === false">
+    <slot />
+  </template>
+
+  <!-- 布局 -->
+  <template v-else>
+    <!-- 布局组件，有内置的，也有外部传入的 -->
+    <component :is="MainLayout">
+      <!-- 组件内预先实现自定义插槽，默认值，都在这里 -->
+      <!-- 比如标签组件，默认实现使用内置的TabsView
+       如果要用，那么布局实现就加上<slot name="tabs" />声明这个插槽，否则不会显示TabsView -->
+      <template #tabs>
+        <!-- 多标签页栏 -->
+        <TabsView />
+      </template>
+
+      <template #default>
+        <!-- 组件缓存 -->
+        <KeepAlive v-if="meta.keepAlive">
+          <Transition
+            v-if="meta.transition"
+            v-bind="typeof meta.transition === 'object' ? meta.transition : {}"
+          >
+            <slot />
+          </Transition>
+          <slot v-else />
+        </KeepAlive>
+
+        <!-- 无缓存但有过渡 -->
+        <Transition
+          v-else-if="meta.transition"
+          v-bind="typeof meta.transition === 'object' ? meta.transition : {}"
+        >
+          <slot />
+        </Transition>
+
+        <!-- 无缓存无过渡 -->
+        <slot v-else />
+      </template>
+    </component>
+  </template>
+</template>

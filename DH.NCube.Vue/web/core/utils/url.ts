@@ -1,0 +1,218 @@
+import qs from 'query-string';
+import { getConfig } from '../configure';
+
+/**
+ * 翻转字符串首字母大小写。
+ * PascalCase 转 camelCase（如 `CreateUserID` → `createUserID`），
+ * camelCase 转 PascalCase（如 `createUserID` → `CreateUserID`）。
+ * 用于容错后端 JSON 序列化时大小写不匹配的情况。
+ */
+export function toPascalAndCamel(str: string): string {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() === str.charAt(0)
+    ? str.charAt(0).toLowerCase() + str.slice(1)
+    : str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * 将短横线命名转为大驼峰命名
+ * 示例: my-device-name → MyDeviceName
+ */
+export function toPascalCase(str: string): string {
+  if (!str) return str;
+  return str
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+}
+
+/**
+ * 将 PascalCase/camelCase 转为短横线风格
+ * 例: MyDeviceName → my-device-name
+ */
+export function toKebabCase(str: string) {
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase();
+}
+
+/**
+ * 路由命名风格
+ */
+export type RouteNamingStyle = 'pascal' | 'kebab';
+
+/**
+ * 将后端返回的菜单 URL 路径转换为指定风格的路径
+ * 示例（kebab 风格）:
+ *   /IoT/Device/Product → /iot/device/product
+ *   /EMS/EnergyReport → /ems/energy-report
+ * 示例（pascal 风格）:
+ *   /IoT/Device/Product → /IoT/Device/Product
+ *   /EMS/EnergyReport → /EMS/EnergyReport
+ *
+ * @param url 后端返回的原始 URL
+ * @param style 路由命名风格，默认 pascal
+ * @returns 指定风格的 URL
+ */
+export function normalizeMenuUrl(url: string, style: RouteNamingStyle = 'pascal'): string {
+  if (!url || typeof url !== 'string') return url;
+
+  // 分离路径和查询参数
+  const [path, query] = url.split('?');
+
+  // 转换路径段
+  const normalizedPath = path
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => style === 'kebab' ? toKebabCase(segment) : segment)
+    .join('/');
+
+  // 重新拼接路径（保留前导斜杠）
+  const result = '/' + normalizedPath;
+
+  // 附加查询参数
+  return query ? `${result}?${query}` : result;
+}
+
+/**
+ * 根据路由路径获取 api 前缀
+ *
+ * 魔方 WebAPI 版实体/区域控制器路由固定带 /api 前缀（见后端 ControllerBaseX 的
+ * [Route("api/[area]/[controller]/[action]")] 与 CubeService 的约定路由
+ * "api/{area}/{controller=Index}/{action=Index}/{id?}"）。
+ *
+ * 早期 /api 由 API_HOST(baseUrl) 统一携带；现 baseUrl 只承载主机、不再内含 /api，
+ * 故由各请求路径自行决定前缀——本函数负责为「路由派生」的实体请求拼上 /api，
+ * 调用方无需关心。服务控制器（/Auth /Sso /Mfa /OAuth 及 /Cube 服务动作）不带前缀，
+ * 由各自硬编码路径处理，不流经本函数。
+ *
+ * 示例：/device/device-profile → /api/Device/DeviceProfile
+ */
+export function routeToApiPrefix(path: string): string {
+  return '/api/' + path.split('/').filter(Boolean).map(toPascalCase).join('/');
+}
+
+/**
+ * 解析 key 在数据对象中「实际存在」的名字。
+ *
+ * 后端 JSON 序列化为 camelCase，而元数据里的字段名是实体属性名（PascalCase），
+ * 两者不一致：直接用 `data[key]` 取值会全部 undefined。列表取值已按此规则容错，
+ * 表单取值与回写必须共用同一套规则，否则出现「列表能显示、编辑不回显」。
+ *
+ * 查找顺序：原名 → 翻转首字母（PascalCase ↔ camelCase）→ 全大写 ↔ 全小写。
+ * 全部未命中时返回原 key（保证回写仍落在字段名义 key 上，新增模式即如此）。
+ *
+ * @param data - 数据对象（如列表行 / 详情响应）
+ * @param key - 元数据字段名（如 `Name`）
+ * @returns 数据对象中真实存在的 key（如 `name`）
+ */
+export function resolveKey(data: Record<string, unknown>, key: string): string {
+  if (key in data) return key;
+  // 翻转首字母再试（容错 PascalCase ↔ camelCase）
+  const flipped = toPascalAndCamel(key);
+  if (flipped !== key && flipped in data) return flipped;
+  // 如果 key 是全大写，转成全小写再试（如 ID → id, UUID → uuid）
+  if (key === key.toUpperCase() && key !== key.toLowerCase()) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey in data) return lowerKey;
+  }
+  // 如果 key 是全小写且包含字母，试试全大写（如 id → ID）
+  if (key === key.toLowerCase() && /[a-z]/.test(key)) {
+    const upperKey = key.toUpperCase();
+    if (upperKey in data) return upperKey;
+  }
+  return key;
+}
+
+/**
+ * 从数据对象中取值，先尝试 `data[key]` 直接获取，
+ * 取不到时通过 `toPascalAndCamel(key)` 翻转首字母再取一次，
+ * 如果 key 是全大写字母（如 ID、UUID），再尝试全小写（id、uuid），
+ * 容错后端 JSON 字段名大小写不匹配问题。
+ */
+export function getValueByKey(data: Record<string, unknown>, key: string): unknown {
+  return data[resolveKey(data, key)];
+}
+
+export function isUrl(path: string) {
+  /* eslint no-useless-escape:0 */
+  const reg =
+    /(((^https?:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)(:[\d]+)?((?:\/[\+~%\/.\w-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)$/g;
+  return reg.test(path);
+}
+
+/**
+ * 将后端返回的资源地址（头像 / 图片 / 文件）解析为可访问的完整 URL。
+ *
+ * 后端上传 / 附件接口常返回以「/」开头的相对路径（如 `/cube/image?id=xxx.png`），
+ * 而非完整 http 地址。前端展示时按以下规则处理：
+ *
+ *   - 空值                                    → 原样返回 ''
+ *   - 已是完整/绝对地址（http(s)://、//、data:、blob:）→ 原样返回
+ *   - baseUrl 为完整地址（跨域部署）          → 剥离末尾 /api 后拼接 origin
+ *   - baseUrl 为路径前缀（如 /api）或空        → 原样返回
+ *
+ * 说明：魔方 WebAPI 版实体接口带 /api 前缀，但资源（/cube/image、/Content、/Sso/Avatar 等）
+ * 由服务控制器 / 静态文件在根路径提供，不带 /api 前缀。因此完整地址型 baseUrl 若带 /api
+ * 路径（如 http://host:5000/api）需先剥离再拼接，规则与 api-core 的 resolveRequestUrl 一致，
+ * 避免生成 http://host:5000/api/cube/image 这类无效地址。
+ *
+ * @param path 后端返回的资源路径
+ */
+export function resolveAssetUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  const s = String(path).trim();
+  if (!s) return '';
+  // 已是绝对地址（含协议、协议相对、data、blob）则不处理
+  if (/^(https?:)?\/\//i.test(s) || /^(data|blob):/i.test(s)) {
+    return s;
+  }
+  const base = (getConfig().request.baseUrl ?? '').replace(/\/+$/, '');
+  // 仅跨域部署（baseUrl 为完整地址）时拼接 origin；资源由根路径提供，需剥离末尾 /api 路径前缀
+  if (/^https?:\/\//i.test(base)) {
+    const baseNoApi = base.replace(/\/api$/i, '');
+    return s.startsWith('/') ? `${baseNoApi}${s}` : `${baseNoApi}/${s}`;
+  }
+  // 路径前缀（如 /api）与空值原样返回
+  return s;
+}
+
+/**
+ * 生成带Get参数的URL
+ * @param {String} url      原来的url
+ * @param {Object} params   get 参数
+ */
+export function generateUrlWithGetParam(url: string, params: {}) {
+  let newUrl = url;
+  if (params && Object.keys(params).length >= 1) {
+    const newParams = params; // filterNullValueObject
+    if (Object.keys(newParams).length >= 1) {
+      newUrl += `${url.indexOf('?') >= 0 ? '&' : '?'}${qs.stringify(newParams)}`;
+    }
+  }
+  return newUrl;
+}
+
+/**
+ * 得到get请求后面的参数部分,并去掉参数值为空的
+ * @param param
+ * @returns {String}
+ */
+export function getUrlParam(param: { [x: string]: any; }) {
+  let on = true;
+  let result = '';
+  for (const item in param) {
+    if (on) {
+      on = false;
+      if (param[item] || param[item] === 0 || param[item] === false) {
+        result = `?${item}=${param[item]}`;
+      } else {
+        result = '?';
+      }
+    } else if (param[item] || param[item] === 0 || param[item] === false) {
+      result = `${result}&${item}=${param[item]}`;
+    }
+  }
+  return result;
+}

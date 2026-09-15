@@ -1,4 +1,4 @@
-﻿using XCode;
+using XCode;
 using XCode.Membership;
 
 namespace NewLife.Cube.Entity;
@@ -13,10 +13,10 @@ public partial class App : Entity<App>
         var df = Meta.Factory.AdditionalFields;
         df.Add(__.Auths);
 
-        // 过滤器 UserModule、TimeModule、IPModule
-        Meta.Modules.Add<UserModule>();
-        Meta.Modules.Add<TimeModule>();
-        Meta.Modules.Add<IPModule>();
+        // 过滤器 UserInterceptor、TimeInterceptor、IPInterceptor
+        Meta.Interceptors.Add<UserInterceptor>();
+        Meta.Interceptors.Add<TimeInterceptor>();
+        Meta.Interceptors.Add<IPInterceptor>();
 
         // 单对象缓存
         var sc = Meta.SingleCache;
@@ -154,13 +154,13 @@ public partial class App : Entity<App>
 
         // 黑名单优先，黑名单里面有的，直接拒绝
         var bs = (Black + "").Split(",", ";");
-        if (bs.Length > 0 && bs.Any(e => ip.IsMatch(ip))) return false;
+        if (bs.Length > 0 && bs.Any(e => e.IsMatch(ip))) return false;
 
         // 白名单里面有的，直接通过
         var ws = (White + "").Split(",", ";");
         if (ws.Length > 0)
         {
-            return ws.Any(e => ip.IsMatch(ip));
+            return ws.Any(e => e.IsMatch(ip));
         }
 
         // 未设置白名单，黑名单里面没有的，直接通过

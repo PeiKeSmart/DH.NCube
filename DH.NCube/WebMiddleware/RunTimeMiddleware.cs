@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
-using System.Net;
 using System.Web;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Http.Features;
 using NewLife.Common;
 using NewLife.Cube.Entity;
@@ -10,6 +10,7 @@ using NewLife.Cube.Web;
 using NewLife.Log;
 using NewLife.Security;
 using NewLife.Web;
+using Stardust.Extensions;
 using XCode.DataAccessLayer;
 using XCode.Membership;
 using HttpContext = Microsoft.AspNetCore.Http.HttpContext;
@@ -22,9 +23,6 @@ public class RunTimeMiddleware
     private readonly RequestDelegate _next;
     private readonly UserService _userService;
     private readonly AccessService _accessService;
-
-    /// <summary>会话提供者</summary>
-    static readonly SessionProvider _sessionProvider = new();
 
     /// <summary>实例化</summary>
     /// <param name="next"></param>
@@ -52,16 +50,20 @@ public class RunTimeMiddleware
         // 强制访问Https
         if (MiddlewareHelper.CheckForceRedirect(ctx)) return;
 
+        // 设置魔方区域
+        TracerMiddleware.AreaNames = CubeService.AreaNames;
+
         // 创建Session集合。后续 ManageProvider.User 需要用到Session
         var session = CreateSession(ctx);
 
-        var url = ctx.Request.GetRawUrl();
+        //var uri = ctx.Request.GetRawUrl();
         var ip = ctx.GetUserHost();
         ManageProvider.UserHost = ip;
         var user = ManageProvider.User;
 
-        // 安全访问
-        var rule = _accessService.Valid(url + "", ua, ip, user, session);
+        // 安全访问。读取请求体用于威胁检测（仅文本类内容，超限不读）
+        var body = await MiddlewareHelper.ReadRequestBodyAsync(ctx);
+        var rule = _accessService.Valid(ctx.Request.GetDisplayUrl(), body, ua, ip, user, session, ctx);
         if (rule != null && rule.ActionKind is AccessActionKinds.Block or AccessActionKinds.Limit)
         {
             if (rule.BlockCode == 302)
@@ -116,12 +118,20 @@ public class RunTimeMiddleware
                 var deviceId = WebHelper.FillDeviceId(ctx);
                 //var sessionId = token?.MD5_16() ?? ip;
                 var sessionId = deviceId;
-                online = _userService.SetWebStatus(online, sessionId, deviceId, p, userAgent, ua, user, ip);
+                // 外部跳转来源。站内跳转或空时返回空，仅首次外部来源写入在线表
+                var refer = WebHelper2.GetExternalRefer(ctx.Request);
+                if (user == null)
+                    // 不采信未验签的令牌用户名（可被伪造），避免污染在线列表
+                    online = _userService.SetStatus(online, sessionId, deviceId, p, userAgent, ua, 0, null, ip, refer);
+                else
+                    online = _userService.SetWebStatus(online, sessionId, deviceId, p, userAgent, ua, user, ip, refer);
                 //FillDeviceId(ctx, olt);
                 if (session == null)
                 {
-                    session = new Dictionary<String, Object>();
-                    session.Add("Online", online);
+                    session = new Dictionary<String, Object>
+                    {
+                        { "Online", online }
+                    };
                 }
                 else
                 {
@@ -130,10 +140,13 @@ public class RunTimeMiddleware
                 ctx.Items["Cube_Online"] = online;
             }
             await _next.Invoke(ctx);
+
+            // 响应完成后追踪HTTP状态码，检测爱虹虫或web扫描攻击
+            _accessService.TrackResponse(ctx.Response.StatusCode, ctx.Request.GetDisplayUrl(), ip, user, session);
         }
         catch (Exception ex)
         {
-            var uri = ctx.Request.GetRawUrl();
+            var uri = HttpExtensions.GetRawUrl(ctx.Request);
             online?.SetError(ex.Message);
 
             XTrace.Log.Error("[{0}]的错误[{1}] {2}", uri, ip, ctx.TraceIdentifier);
@@ -146,7 +159,7 @@ public class RunTimeMiddleware
             ctx.Items["Exception"] = new ErrorModel
             {
                 RequestId = DefaultSpan.Current?.TraceId ?? Activity.Current?.Id ?? ctx.TraceIdentifier,
-                Uri = uri,
+                Uri = uri?.ToUri(),
                 Exception = ex
             };
 
@@ -219,7 +232,7 @@ public class RunTimeMiddleware
             ss?.SetString(key, sid);
         }
 
-        var session = _sessionProvider.GetSession(sid);
+        var session = SessionProvider.Instance.GetSession(sid);
         ctx.Items["Session"] = session;
 
         return session;

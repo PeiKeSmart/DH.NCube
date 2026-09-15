@@ -1,0 +1,155 @@
+import type {
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios';
+
+// 基础配置
+export interface BaseConfig {
+  title: string;
+  logo?: string;
+  footer?: string;
+  env?: 'dev' | 'production' | 'test';
+}
+
+// 菜单相关配置
+export interface MenuConfig {
+  getMenuAxiosConfig:
+  | AxiosRequestConfig
+  | (() => AxiosRequestConfig)
+  | (() => Promise<AxiosRequestConfig>);
+  isMenuTree: boolean;
+  dataKey: string;
+  idField: string;
+  parentField: string;
+  nameField: string;
+  pathField: string;
+  titleField: string;
+  iconField: string;
+  sortField: string;
+  childrenField: string;
+  /** 可见性字段名，该字段值为 false 时菜单项及其子树不显示 */
+  visibleField?: string;
+}
+
+// 用户相关配置
+export interface UserConfig {
+  getUserInfoAxiosConfig:
+  | AxiosRequestConfig
+  | (() => AxiosRequestConfig)
+  | (() => Promise<AxiosRequestConfig>);
+}
+
+// UI相关配置
+export interface UIConfig {
+  layout: {
+    header: {
+      show: boolean;
+      fixed: boolean;
+      theme: 'light' | 'dark';
+      height?: number;
+    };
+    sider?: {
+      show?: boolean;
+      collapsible?: boolean;
+      defaultCollapsed?: boolean;
+      width?: number;
+      collapsedWidth?: number;
+      theme?: 'light' | 'dark';
+    };
+    footer?: {
+      show?: boolean;
+      fixed?: boolean;
+    };
+  };
+  theme?: {
+    primaryColor?: string;
+    linkColor?: string;
+    successColor?: string;
+    warningColor?: string;
+    errorColor?: string;
+    font?: {
+      baseSize?: number;
+      family?: string;
+    };
+  };
+}
+
+// API相关配置
+export interface RequestConfig {
+  /** 基础URL */
+  baseUrl: string;
+  /** 请求超时时间 */
+  timeout?: number;
+  /** 额外请求头（静态对象或返回对象的函数），对应 api-core 的 additionalRequestHeaders */
+  additionalRequestHeaders?: Record<string, string> | (() => Record<string, string>);
+  /** 响应拦截器 */
+  responseIntercept?: (response: AxiosResponse) => void;
+  /** 请求配置拦截钩子：在请求发送前对配置做自定义修改 */
+  requestInterceptor?: (
+    config: InternalAxiosRequestConfig,
+  ) => InternalAxiosRequestConfig | Promise<InternalAxiosRequestConfig>;
+}
+
+// 认证相关配置
+export interface AuthConfig {
+  tokenKey?: string;
+  refreshTokenKey?: string;
+  oauthUrl?: string;
+  redirectUrl?: string;
+  pageTitle?: string;
+  background?: string;
+  logoutAxiosConfig?:
+  | AxiosRequestConfig
+  | (() => AxiosRequestConfig)
+  | (() => Promise<AxiosRequestConfig>);
+  reLoginParams?: {
+    titleIntlCode?: string;
+    titleIntlDefault?: string;
+    messageIntlCode?: string;
+    messageIntlDefault?: string;
+    okTextIntlCode?: string;
+    okTextIntlDefault?: string;
+    cancelTextIntlCode?: string;
+    cancelTextIntlDefault?: string;
+    loginPageUrl?: string;
+    cancelText?: string;
+    onModalShow?: () => void;
+    onOk?: () => void;
+    onCancel?: () => void;
+    noticeMethod?: Array<() => void>;
+    isShow?: boolean;
+    isUseCustomizeModal?: boolean;
+    customizeModalProps?: Record<string, unknown>;
+  };
+}
+
+// 路由相关配置
+export interface RouterConfig {
+  /** 路由命名风格：pascal（大驼峰，默认）| kebab（短横线） */
+  routeNamingStyle: 'pascal' | 'kebab';
+  /** 路由模式：hash（兼容静态部署）| history（默认，需服务端 fallback 支持） */
+  history?: 'hash' | 'history';
+}
+
+// 总配置
+export interface CubeFrontConfig {
+  base: BaseConfig;
+  ui: UIConfig;
+  request: RequestConfig;
+  auth: AuthConfig;
+  menu: MenuConfig;
+  user: UserConfig;
+  router: RouterConfig;
+}
+
+// 环境配置类型 - 所有字段都是可选的深度部分类型
+export type EnvConfig = {
+  base?: Partial<BaseConfig>;
+  ui?: Partial<UIConfig>;
+  request?: Partial<RequestConfig>;
+  auth?: Partial<AuthConfig>;
+  menu?: Partial<MenuConfig>;
+  user?: Partial<UserConfig>;
+  router?: Partial<RouterConfig>;
+};

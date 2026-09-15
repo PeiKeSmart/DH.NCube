@@ -6,8 +6,9 @@ using XCode.Membership;
 namespace NewLife.Cube.Areas.Cube.Controllers;
 
 /// <summary>委托代理</summary>
+[DataPermission(null, "PrincipalId={#userId} or AgentId={#userId}")]
 [CubeArea]
-[Menu(0, true, Icon = "fa-user-secret")]
+[Menu(0, true, Icon = "UserFilled")]
 public class PrincipalAgentController : EntityController<PrincipalAgent, PrincipalAgentModel>
 {
     static PrincipalAgentController()

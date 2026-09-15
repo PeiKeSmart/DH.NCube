@@ -8,11 +8,16 @@ using Microsoft.Extensions.WebEncoders;
 using Microsoft.Net.Http.Headers;
 using NewLife.Caching;
 using NewLife.Common;
+using NewLife.Cube.AI;
+using NewLife.Cube.Enums;
+using NewLife.Cube.Extensions;
 using NewLife.Cube.Modules;
 using NewLife.Cube.Services;
 using NewLife.Cube.WebMiddleware;
+using NewLife.Cube.Widgets;
 using NewLife.IP;
 using NewLife.Log;
+using NewLife.Messaging;
 using NewLife.Serialization;
 using NewLife.Web;
 using Stardust;
@@ -68,6 +73,9 @@ public static class CubeService
         var set = CubeSetting.Current;
         services.AddSingleton(set);
 
+        // 租户上下文。封装静态 AsyncLocal 的无状态门面，注册为 Singleton 以避免被 Singleton 服务（如 UserService）捕获 scoped 依赖；租户状态本身由 AsyncLocal 按请求隔离
+        services.AddSingleton<ITenantContext, TenantContextService>();
+
         // 连接字符串
         DAL.ConnStrs.TryAdd("Cube", "MapTo=Membership");
 
@@ -95,9 +103,6 @@ public static class CubeService
             options.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All);
         });
 
-        // 添加管理提供者
-        services.AddManageProvider();
-
         // 添加数据保护，优先在外部支持Redis持久化，这里默认使用数据库持久化
         //if (services.Any(e => e.ServiceType == typeof(FullRedis) || e.ServiceType == typeof(ICacheProvider) && e.ImplementationType == typeof(RedisCacheProvider)))
         //    services.AddDataProtection().PersistKeysToRedis();
@@ -109,31 +114,144 @@ public static class CubeService
         // 配置Json
         services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
         {
-#if NET7_0_OR_GREATER
-            // 支持模型类中的DataMember特性
-            options.JsonSerializerOptions.TypeInfoResolver = DataMemberResolver.Default;
-#endif
-            options.JsonSerializerOptions.Converters.Add(new TypeConverter());
-            options.JsonSerializerOptions.Converters.Add(new LocalTimeConverter());
-            // 支持中文编码
-            options.JsonSerializerOptions.Encoder = JavaScriptEncoder.Create(UnicodeRanges.All);
+            SystemJson.Apply(options.JsonSerializerOptions, true);
+            //#if NET7_0_OR_GREATER
+            //            // 支持模型类中的DataMember特性
+            //            options.JsonSerializerOptions.TypeInfoResolver = DataMemberResolver.Default;
+            //#endif
+            //            options.JsonSerializerOptions.Converters.Add(new TypeConverter());
+            //            options.JsonSerializerOptions.Converters.Add(new LocalTimeConverter());
+            //            // 支持中文编码
+            //            options.JsonSerializerOptions.Encoder = JavaScriptEncoder.Create(UnicodeRanges.All);
+        });
+
+        // 配置模型绑定验证失败的响应格式，返回字段级验证错误信息
+        // 自动查找实体元数据中的 DisplayName 来增强错误消息
+        services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+        {
+            options.InvalidModelStateResponseFactory = context =>
+            {
+                // 尝试从控制器泛型参数中解析实体类型，获取字段 DisplayName
+                var entityFields = ResolveEntityFields(context);
+
+                var fieldErrors = new List<FieldError>();
+                foreach (var kv in context.ModelState)
+                {
+                    foreach (var error in kv.Value.Errors)
+                    {
+                        var fieldName = kv.Key;
+                        var message = error.ErrorMessage;
+
+                        // JSON 根级别解析失败（如 body 是 123 但期望对象），字段名为 "$"
+                        // 错误消息类似 "The JSON value could not be converted to System.Int32..."
+                        if (fieldName == "$" || message.Contains("Path: $"))
+                        {
+                            // 从请求路径推断预期操作，给出有意义的提示
+                            var path = context.HttpContext.Request.Path + "";
+                            var method = context.HttpContext.Request.Method;
+                            var hint = method.ToUpperInvariant() switch
+                            {
+                                "POST" => "请求数据格式不正确，请检查是否传递了正确的JSON对象",
+                                "PUT" => "请求数据格式不正确，请检查是否传递了正确的JSON对象",
+                                "DELETE" => "请求参数格式不正确，请检查ID值是否有效",
+                                _ => "请求数据格式不正确"
+                            };
+                            fieldErrors.Add(new FieldError
+                            {
+                                Field = fieldName,
+                                Message = $"{hint}（{path}）",
+                                Error = message ?? error.Exception?.ToString()
+                            });
+                            continue;
+                        }
+
+                        // 如果错误消息中使用的是 C# 属性名，尝试替换为 DisplayName
+                        if (entityFields != null && entityFields.TryGetValue(fieldName, out var displayName)
+                            && displayName != fieldName && !message.Contains(displayName))
+                        {
+                            // ASP.NET Core 错误消息常以 "The field" 或字段名开头，尝试替换
+                            message = message.Replace($"The {fieldName} field", $"「{displayName}」")
+                                             .Replace(fieldName, displayName);
+                        }
+
+                        fieldErrors.Add(new FieldError
+                        {
+                            Field = fieldName,
+                            Message = message,
+                            Error = message ?? error.Exception?.ToString()
+                        });
+                    }
+                }
+
+                var firstMsg = fieldErrors.Count > 0 ? fieldErrors[0].Message : "请求参数错误";
+                var response = new ApiResponse<Object>
+                {
+                    Code = Models.CubeCode.ParamError.ToInt(),
+                    Message = firstMsg,
+                    Data = null,
+                    FieldErrors = fieldErrors.Count > 0 ? fieldErrors : null
+                };
+
+                return new Microsoft.AspNetCore.Mvc.JsonResult(response) { StatusCode = 200 };
+            };
         });
 
         //默认注入缓存实现
         services.TryAddSingleton<ICacheProvider, CacheProvider>();
 
+        // 页面检查点服务：以缓存提供者为事件总线工厂（MemoryCache=进程内；FullRedis=Redis 广播，跨实例匹配检查点）
+        services.TryAddSingleton<PageCheckpointService>(sp => new PageCheckpointService((sp.GetService<ICacheProvider>()?.Cache as IEventBusFactory)));
+
         // 服务
         services.AddSingleton<PasswordService>();
         services.AddSingleton<UserService>();
+        services.AddSingleton<VerifyCodeService>();
+        services.AddSingleton<AuthEnhancedService>();
+        services.AddSingleton<AccountActivateService>();
+        services.AddSingleton<SecurityEventService>();
+        services.AddSingleton<BlockService>();
+        services.AddHostedService(sp => sp.GetRequiredService<BlockService>());
         services.AddSingleton<AccessService>();
         services.AddSingleton<PageService>();
         services.AddSingleton<TokenService>();
+        services.AddSingleton<SmsService>();
+        services.AddSingleton<MailService>();
+        services.TryAddSingleton<ICaptchaService, DrawingCaptchaService>();
+        services.TryAddSingleton<IMfaService, TotpMfaService>();
+
+        // 账号注销处理器：默认处理器清理框架侧个人数据；下游可继续追加注册（必须 Singleton）
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAccountCloseHandler, DefaultAccountCloseHandler>());
+
+        // SSO 服务
+        services.AddSingleton<Services.Sso.IOAuthAppService, Services.Sso.OAuthAppService>();
+        services.AddSingleton<Services.Sso.ITokenService, Services.Sso.TokenService>();
+        services.AddSingleton<Services.Sso.IUserBindingService, Services.Sso.UserBindingService>();
+        services.AddSingleton<Services.Sso.ISsoClientService, Services.Sso.SsoClientService>();
+        services.AddSingleton<Services.Sso.ISsoServerService, Services.Sso.SsoServerService>();
+
+        // 工作台组件管理器。单例复用扫描缓存，避免每次请求 new 实例重复扫描程序集
+        services.AddSingleton<WidgetManager>();
 
         //services.AddHostedService<JobService>();
         services.AddHostedService<DataRetentionService>();
 
         // 添加定时作业
         services.AddCubeJob();
+
+        // 注册文件存储服务。当文件提供或文件拉取任一功能开启时，启用文件存储
+        if (set.FileStorageProvide || set.FileStorageFetch)
+            services.AddCubeFileStorage();
+
+        // 注册附件存储提供者。根据配置切换本地磁盘与对象存储（OSS/COS/七牛）
+        services.AddCubeAttachmentStorage(set);
+
+        // 注册 AI 服务
+        services.AddCubeAI();
+
+        // 注册列表型值集数据代理（默认 HTTP 转发）。值集已代码优先（枚举/[LovList] 反射直读），无需启动扫描注册；
+        // 使用者可在 AddCube 之前注册自定义 ILovListDataProxy 实现覆盖默认行为；IHttpClientFactory 以 TryAdd 注册，不覆盖 AddHttpClient。
+        services.TryAddSingleton<ILovListDataProxy, DefaultLovListDataProxy>();
+        services.TryAddDefaultHttpClientFactory();
 
         // 注册IP地址库
         IpResolver.Register();
@@ -206,6 +324,22 @@ public static class CubeService
 
         // 注册中间件
 
+        // 服务魔方内嵌静态资源（wwwroot），支持物理目录覆盖
+        {
+            var embeddedProvider = new CubeEmbeddedFileProvider(Assembly.GetExecutingAssembly(), "NewLife.Cube.wwwroot");
+            var webRoot = set.WebRootPath;
+            var root = AppDomain.CurrentDomain.BaseDirectory.CombinePath(webRoot);
+            if (root.IsNullOrEmpty() || !Directory.Exists(root)) root = webRoot.GetFullPath();
+
+            IFileProvider fileProvider;
+            if (!root.IsNullOrEmpty() && Directory.Exists(root))
+                fileProvider = new CompositeFileProvider(new PhysicalFileProvider(root), embeddedProvider);
+            else
+                fileProvider = embeddedProvider;
+
+            app.UseStaticFiles(new StaticFileOptions { FileProvider = fileProvider });
+        }
+
         // 如果，头像目录设置不为空，开启静态文件中间件
         if (!set.AvatarPath.IsNullOrWhiteSpace())
         {
@@ -224,16 +358,17 @@ public static class CubeService
         app.UseAuthentication();
 
         // 如果已引入追踪中间件，则这里不再引入
-        TracerMiddleware.Tracer ??= DefaultTracer.Instance;
-        if (TracerMiddleware.Tracer != null && !app.Properties.ContainsKey(nameof(TracerMiddleware)))
-        {
-            app.UseMiddleware<TracerMiddleware>();
+        //TracerMiddleware.Tracer ??= DefaultTracer.Instance;
+        //if (TracerMiddleware.Tracer != null && !app.Properties.ContainsKey(nameof(TracerMiddleware)))
+        //{
+        //    app.UseMiddleware<TracerMiddleware>();
 
-            app.Properties[nameof(TracerMiddleware)] = typeof(TracerMiddleware);
-        }
+        //    app.Properties[nameof(TracerMiddleware)] = typeof(TracerMiddleware);
+        //}
+        app.UseStardust();
 
         app.UseMiddleware<RunTimeMiddleware>();
-        app.UseMiddleware<TenantMiddleware>();
+        app.UseMiddleware<DataScopeMiddleware>();
 
         // 设置默认路由。如果外部已经执行 UseRouting，则直接注册
         app.UseRouter(endpoints =>
@@ -242,7 +377,7 @@ public static class CubeService
 
             endpoints.MapControllerRoute(
                 "CubeAreas",
-                "{area}/{controller=Index}/{action=Index}/{id?}");
+                "api/{area}/{controller=Index}/{action=Index}/{id?}");
         });
 
         //ManageProvider2.EndpointRoute = (IEndpointRouteBuilder)app.Properties["__EndpointRouteBuilder"];
@@ -270,7 +405,7 @@ public static class CubeService
 
         // 注册退出事件
         if (app is IHost web)
-            NewLife.Model.Host.RegisterExit(() =>
+            Model.Host.RegisterExit(() =>
             {
                 XTrace.WriteLine("魔方优雅退出！");
                 web.StopAsync().Wait();
@@ -325,6 +460,55 @@ public static class CubeService
                 }
             }
         }
+    }
+    #endregion
+
+    #region 辅助
+    /// <summary>从 ActionContext 中解析实体控制器对应的字段元数据，返回 字段名→DisplayName 映射</summary>
+    private static IDictionary<String, String> ResolveEntityFields(Microsoft.AspNetCore.Mvc.ActionContext context)
+    {
+        try
+        {
+            if (context.ActionDescriptor is Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor cad)
+            {
+                var controllerType = cad.ControllerTypeInfo.AsType();
+                // 沿继承链查找 EntityController<TEntity> 或 EntityController<TEntity, TModel>
+                var baseType = controllerType;
+                while (baseType != null && baseType != typeof(Object))
+                {
+                    if (baseType.IsGenericType)
+                    {
+                        var genericDef = baseType.GetGenericTypeDefinition();
+                        if (genericDef == typeof(EntityController<>) ||
+                            genericDef == typeof(EntityController<,>))
+                        {
+                            var entityType = baseType.GetGenericArguments()[0];
+                            // 通过静态 Factory 属性获取字段列表
+                            var factoryProp = entityType.GetProperty("Meta");
+                            if (factoryProp != null)
+                            {
+                                var meta = factoryProp.GetValue(null);
+                                var factory = meta?.GetType().GetProperty("Factory")?.GetValue(meta) as IEntityFactory;
+                                if (factory != null)
+                                {
+                                    var dict = new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);
+                                    foreach (var fi in factory.AllFields)
+                                    {
+                                        if (!fi.DisplayName.IsNullOrEmpty() && fi.DisplayName != fi.Name)
+                                            dict[fi.Name] = fi.DisplayName;
+                                    }
+                                    return dict.Count > 0 ? dict : null;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    baseType = baseType.BaseType;
+                }
+            }
+        }
+        catch { /* 解析失败不影响正常响应 */ }
+        return null;
     }
     #endregion
 }

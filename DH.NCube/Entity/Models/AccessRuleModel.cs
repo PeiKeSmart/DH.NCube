@@ -26,6 +26,9 @@ public partial class AccessRuleModel
     /// <summary>URL路径。支持*模糊匹配，多个逗号隔开</summary>
     public String Url { get; set; }
 
+    /// <summary>触发响应码。检测HTTP响应码，多个逗号隔开，如404,403。设置后在响应完成后检测，超阈值封禁IP</summary>
+    public String ResponseCodes { get; set; }
+
     /// <summary>用户代理。支持*模糊匹配，多个逗号隔开</summary>
     public String UserAgent { get; set; }
 
@@ -52,6 +55,9 @@ public partial class AccessRuleModel
 
     /// <summary>限流次数。限流考察期间达到该阈值时，执行拦截</summary>
     public Int32 LimitTimes { get; set; }
+
+    /// <summary>过期时间。到期后本规则自动失效；未设置表示永久有效。仅供系统自动封禁使用</summary>
+    public DateTime ExpireTime { get; set; }
 
     /// <summary>创建者</summary>
     public Int32 CreateUserID { get; set; }
@@ -85,6 +91,7 @@ public partial class AccessRuleModel
         Enable = model.Enable;
         Priority = model.Priority;
         Url = model.Url;
+        ResponseCodes = model.ResponseCodes;
         UserAgent = model.UserAgent;
         IP = model.IP;
         LoginedUser = model.LoginedUser;
@@ -94,6 +101,7 @@ public partial class AccessRuleModel
         LimitDimension = model.LimitDimension;
         LimitCycle = model.LimitCycle;
         LimitTimes = model.LimitTimes;
+        ExpireTime = model.ExpireTime;
         CreateUserID = model.CreateUserID;
         CreateTime = model.CreateTime;
         CreateIP = model.CreateIP;

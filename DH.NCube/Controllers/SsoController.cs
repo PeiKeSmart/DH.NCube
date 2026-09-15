@@ -1,10 +1,16 @@
 ﻿using System.ComponentModel;
+using System.Net;
 using System.Security.Cryptography;
+using System.Xml.Linq;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using NewLife.Caching;
 using NewLife.Cube.Entity;
+using NewLife.Cube.Extensions;
+using NewLife.Cube.Models;
+using NewLife.Cube.Services;
+using NewLife.Cube.Services.Sso;
 using NewLife.Cube.Web;
 using NewLife.Cube.Web.Models;
 using NewLife.Log;
@@ -12,6 +18,7 @@ using NewLife.Model;
 using NewLife.Remoting;
 using NewLife.Security;
 using NewLife.Web;
+using NewLife.Web.OAuth;
 using XCode.Membership;
 
 /*
@@ -57,35 +64,50 @@ namespace NewLife.Cube.Controllers;
 [Route("[controller]/[action]")]
 public class SsoController : ControllerBaseX
 {
-    /// <summary>当前提供者</summary>
-    public static SsoProvider Provider { get; set; }
-
-    /// <summary>单点登录服务端</summary>
-    public static OAuthServer OAuth { get; set; }
-
     /// <summary>存储最近用过的code，避免用户刷新页面</summary>
     private readonly ICache _cache;
     private readonly CubeSetting _setting;
-
-    static SsoController()
-    {
-        Provider = new SsoProvider { Tracer = DefaultTracer.Instance };
-        OAuth = new OAuthServer
-        {
-            Log = LogProvider.Provider.AsLog("OAuth")
-        };
-    }
+    private readonly ISsoClientService _clientService;
+    private readonly ISsoServerService _serverService;
+    private readonly ITokenService _tokenService;
+    private readonly IOAuthAppService _appService;
+    private readonly IUserBindingService _bindingService;
+    private readonly ITenantContext _tenantContext;
 
     /// <summary>实例化单点登录控制器</summary>
     /// <param name="setting"></param>
     /// <param name="cacheProvider"></param>
-    public SsoController(CubeSetting setting, ICacheProvider cacheProvider)
+    /// <param name="clientService">SSO客户端服务</param>
+    /// <param name="serverService">SSO服务端服务</param>
+    /// <param name="tokenService">令牌服务</param>
+    /// <param name="appService">应用验证服务</param>
+    /// <param name="bindingService">用户绑定服务</param>
+    /// <param name="tenantContext">租户上下文</param>
+    public SsoController(CubeSetting setting, ICacheProvider cacheProvider,
+        ISsoClientService clientService, ISsoServerService serverService,
+        ITokenService tokenService, IOAuthAppService appService, IUserBindingService bindingService, ITenantContext tenantContext)
     {
         _cache = cacheProvider.Cache;
         _setting = setting;
+        _clientService = clientService;
+        _serverService = serverService;
+        _tokenService = tokenService;
+        _appService = appService;
+        _bindingService = bindingService;
+        _tenantContext = tenantContext;
 
-        OAuth.Setting = _setting;
+        // 设置应用验证服务的CubeSetting
+        ((OAuthAppService)_appService).Setting = _setting;
 
+        // 设置SSO客户端服务的用户绑定服务（ASP.NET Core DI 不支持属性注入）
+        ((SsoClientService)_clientService).BindingService = bindingService;
+
+        // 设置SSO服务端服务的依赖属性
+        ((SsoServerService)_serverService).AppService = appService;
+        ((SsoServerService)_serverService).TokenService = tokenService;
+
+        // 设置令牌服务的依赖属性
+        ((Services.Sso.TokenService)_tokenService).AppService = appService;
     }
 
     #region 单点登录客户端
@@ -95,30 +117,24 @@ public class SsoController : ControllerBaseX
     /// <param name="name"></param>
     /// <returns></returns>
     [AllowAnonymous]
-    [HttpGet]
-    public virtual ActionResult Login(String name)
+    [HttpGet("{name}")]
+    public virtual ActionResult Login([FromRoute][FromQuery] String name)
     {
-        var prov = Provider;
-        var client = prov.GetClient(name);
+        var client = _clientService.GetClient(_tenantContext.TenantId, name);
         client.Init(GetUserAgent());
 
-        var rurl = prov.GetReturnUrl(Request, true);
+        var rurl = _clientService.GetReturnUrl(Request, true);
 
         return base.Redirect(OnLogin(client, null, rurl, null));
     }
 
+    #region MyRegion
+
     private String OnLogin(OAuthClient client, String state, String returnUrl, OAuthLog log)
     {
-        var prov = Provider;
-        var redirect = prov.GetRedirect(Request, "~/Sso/LoginInfo/" + client.Name);
+        var redirect = _clientService.GetRedirect(Request, "~/Sso/LoginInfo/" + client.Name, client.Name);
         // 请求来源，前后端分离时传front-end，重定向会带上token放到锚点
         var source = GetRequest("source");
-        //if (state.IsNullOrEmpty() && !returnUrl.IsNullOrEmpty()) state = $"r={returnUrl}";
-        //if (!source.IsNullOrEmpty())
-        //{
-        //    state += (state.IsNullOrEmpty() ? "" : "&") + $"s={source}";
-        //}
-        //state = HttpUtility.UrlEncode(state);
 
         if (log == null)
         {
@@ -154,21 +170,17 @@ public class SsoController : ControllerBaseX
         if (id.IsNullOrEmpty()) throw new ArgumentNullException(nameof(id));
 
         var name = id;
-        var prov = Provider;
-        var client = prov.GetClient(name);
+        var client = _clientService.GetClient(_tenantContext.TenantId, name);
         client.Init(GetUserAgent());
 
         client.WriteLog("LoginInfo name={0} code={1} state={2} {3}", name, code, state, Request.GetRawUrl());
 
-        //var ds = state.SplitAsDictionary("=", "&");
         var log = OAuthLog.FindById(state.ToLong());
         if (log == null) throw new InvalidOperationException("无效state=" + state);
 
         // 无法拿到code时，跳回去再来
         if (code.IsNullOrEmpty())
         {
-            //if (state == "refresh") throw new Exception("非法请求，无法取得code");
-
             return Redirect(OnLogin(client, null, null, log));
         }
         // 短期内用过的code也跳回
@@ -176,11 +188,9 @@ public class SsoController : ControllerBaseX
             return Redirect(OnLogin(client, null, null, log));
 
         // 构造redirect_uri，部分提供商（百度）要求获取AccessToken的时候也要传递
-        var redirect = prov.GetRedirect(Request, "~/Sso/LoginInfo/" + client.Name);
+        var redirect = _clientService.GetRedirect(Request, "~/Sso/LoginInfo/" + client.Name, client.Name);
         client.Authorize(redirect);
 
-        //var returnUrl = prov.GetReturnUrl(Request, false);
-        //var returnUrl = ds["r"];
         var returnUrl = log.RedirectUri;
 
         try
@@ -193,41 +203,36 @@ public class SsoController : ControllerBaseX
                 // 如果拿不到访问令牌或用户信息，则重新跳转
                 if (client.AccessToken.IsNullOrEmpty() && client.OpenID.IsNullOrEmpty() && client.UserID == 0 && client.UserName.IsNullOrEmpty())
                 {
-                    XTrace.WriteLine("[{2}]拿不到访问令牌 code={0} state={1}", code, state, id);
+                    XTrace.WriteLine("[{2}]拿不到访问令牌，自动重跳SSO重新授权 code={0} state={1}", code, state, id);
                     XTrace.WriteLine(Request.GetRawUrl() + "");
                     if (!html.IsNullOrEmpty()) XTrace.WriteLine(html);
 
                     log.Success = false;
-                    log.Remark = html;
+                    log.Remark = $"无法获取令牌，自动重新授权: {html}";
+                    log.Update();
 
-                    throw new InvalidOperationException($"内部错误，无法获取令牌 code={code}");
+                    return Redirect(OnLogin(client, null, returnUrl, null));
                 }
 
                 log.AccessToken = client.AccessToken;
                 log.RefreshToken = client.RefreshToken;
             }
 
-            //// 特殊处理钉钉
-            //if (client is DingTalkClient ding) DoDingDing(ding);
-
             // 获取OpenID。部分提供商不需要
             if (!client.OpenIDUrl.IsNullOrEmpty()) client.GetOpenID();
 
             // 短时间内不要重复拉取用户信息
-            // 注意，这里可能因为没有OpenID和UserName，无法判断得到用户链接，需要GetUserInfo后方能匹配UserConnect
             var set = CubeSetting.Current;
-            var uc = prov.GetConnect(client);
+            var uc = _bindingService.GetConnect(client);
             if (uc.UpdateTime.AddSeconds(set.RefreshUserPeriod) < DateTime.Now)
             {
-                // 获取用户信息
                 if (!client.UserUrl.IsNullOrEmpty()) client.GetUserInfo();
             }
 
-            // 如果前面没有取得用户链接，需要再次查询，因为GetUserInfo可能取得了UserName，而前面只有OpenId
-            if (uc.ID == 0) uc = prov.GetConnect(client);
+            if (uc.ID == 0) uc = _bindingService.GetConnect(client);
             uc.Fill(client);
 
-            var url = prov.OnLogin(client, HttpContext.RequestServices, uc, log.Action == "Bind", log.UserId);
+            var url = _clientService.OnLogin(client, HttpContext.RequestServices, uc, log.Action == "Bind", log.UserId);
 
             log.ConnectId = uc.ID;
             log.UserId = uc.UserID;
@@ -263,24 +268,48 @@ public class SsoController : ControllerBaseX
             if (logId > 0 && logId != log.Id)
             {
                 Session["Cube_OAuthId"] = null;
-                var log2 = Provider.BindAfterLogin(logId);
+                var log2 = _bindingService.BindAfterLogin(logId);
                 if (log2 != null && log2.Success && !log2.RedirectUri.IsNullOrEmpty()) return Redirect(log2.RedirectUri);
             }
 
             if (!returnUrl.IsNullOrEmpty()) url = returnUrl;
 
-            // 子系统颁发token给前端
+            // 子系统颁发token给前端（防御纵深：再次校验目标URL是否在安全域名白名单内）
             var user = ManageProvider.Provider.Current;
             if (log.Source == "front-end")
             {
-                var token = HttpContext.IssueToken(user, TimeSpan.FromSeconds(set.TokenExpire));
-                url += $"#token={token}";
+                if (!_clientService.IsSafeDomain(url, set.SsoSafeDomains))
+                {
+                    XTrace.WriteLine("[安全] SSO Token 颁发被拦截，跨域目标不在 SsoSafeDomains 白名单: {0}", url);
+                    url = _clientService.SuccessUrl;
+                }
+                else
+                {
+                    var tokenModel = HttpContext.IssueLoginToken(user, TimeSpan.FromSeconds(set.TokenExpire));
+                    url += $"#token={tokenModel.AccessToken}";
+                }
             }
 
             // 设置租户
             HttpContext.ChooseTenant(user.ID);
 
+            // SSO 登录显式持久化选中的租户到 Cookie（与 CompleteLogin 一致，认证路径不再写 Cookie）
+            if (_tenantContext.Mode != TenantMode.None)
+                HttpContext.SaveTenant(_tenantContext.TenantId);
+
             return Redirect(url);
+        }
+        catch (InvalidOperationException ex) when (OAuthHelper.IsCodeExpired(ex))
+        {
+            // 授权码已过期或无效（如停留在SSO登录页过久），自动重跳SSO重新授权，避免用户看到错误页
+            XTrace.WriteLine("[{0}]授权码已过期，自动重跳SSO重新授权 code={1} state={2} {3}", id, code, state, ex.Message);
+            XTrace.WriteLine(Request.GetRawUrl() + "");
+
+            log.Success = false;
+            log.Remark = $"授权码已过期，自动重新授权: {ex.Message}";
+            log.Update();
+
+            return Redirect(OnLogin(client, null, returnUrl, null));
         }
         catch (Exception ex)
         {
@@ -304,14 +333,12 @@ public class SsoController : ControllerBaseX
     public virtual ActionResult Logout()
     {
         // 先读Session，待会会清空
-        var prov = Provider;
         var name = GetRequest("name");
         if (name.IsNullOrEmpty()) name = Session["Cube_Sso"] as String;
-        var client = prov.GetClient(name);
+        var client = _clientService.GetClient(_tenantContext.TenantId, name);
         client.Init(GetUserAgent());
 
-        var prv = Provider;
-        prv?.Logout();
+        _bindingService.Logout();
 
         var url = "";
 
@@ -319,27 +346,25 @@ public class SsoController : ControllerBaseX
         var set = CubeSetting.Current;
         if (client != null && set.LogoutAll)
         {
-            if (client.LogoutUrl.IsNullOrEmpty() && name.EqualIgnoreCase("NewLife")) 
+            if (client.LogoutUrl.IsNullOrEmpty() && name.EqualIgnoreCase("NewLife"))
                 client.LogoutUrl = "logout?client_id={key}&redirect_uri={redirect}&state={state}";
             if (!client.LogoutUrl.IsNullOrEmpty())
             {
-                // 准备返回地址
                 url = GetRequest("r");
                 if (url.IsNullOrEmpty()) url = GetRequest("ReturnUrl");
-                if (url.IsNullOrEmpty()) url = prv.SuccessUrl;
+                if (url.IsNullOrEmpty()) url = _clientService.SuccessUrl;
 
-                var state = GetRequest("state");
+                var logoutState = GetRequest("state");
 
-                url = url.AsUri(Request.GetRawUrl()) + "";
+                url = url.AsUri(Request.GetRawUrl()?.ToUri()) + "";
 
-                // 跳转到验证中心注销地址
-                url = client.Logout(url, state);
+                url = client.Logout(url, logoutState);
 
                 return Redirect(url);
             }
         }
 
-        url = Provider?.GetReturnUrl(Request, false);
+        url = _clientService.GetReturnUrl(Request, false);
         if (url.IsNullOrEmpty()) url = "~/";
 
         // 严格校验回跳地址，区分SSO模式和本地模式
@@ -348,12 +373,11 @@ public class SsoController : ControllerBaseX
             var clientId = GetRequest("client_id");
             if (!clientId.IsNullOrEmpty())
             {
-                var app = OAuth.Auth(clientId, null, UserHost);
+                var app = _appService.Auth(clientId, null, UserHost);
                 if (!app.ValidCallback(url)) throw new XException("回调地址不合法 {0}", url);
             }
             else
             {
-                // 本地模式，只允许回到本站点
                 url = "~/";
             }
         }
@@ -367,9 +391,7 @@ public class SsoController : ControllerBaseX
     [HttpGet]
     public virtual ActionResult Bind(String id)
     {
-        var prov = Provider;
-
-        var user = prov.Current;
+        var user = _clientService.Current;
         if (user == null)
         {
             var returnUrl = Request.GetEncodedPathAndQuery();
@@ -377,11 +399,11 @@ public class SsoController : ControllerBaseX
             return Redirect(rurl);
         }
 
-        var url = prov.GetReturnUrl(Request, true);
-        var client = prov.GetClient(id);
+        var url = _clientService.GetReturnUrl(Request, true);
+        var client = _clientService.GetClient(_tenantContext.TenantId, id);
         client.Init(GetUserAgent());
 
-        var redirect = prov.GetRedirect(Request, "~/Sso/LoginInfo/" + client.Name);
+        var redirect = _clientService.GetRedirect(Request, "~/Sso/LoginInfo/" + client.Name, client.Name);
 
         var log = new OAuthLog
         {
@@ -408,7 +430,7 @@ public class SsoController : ControllerBaseX
     [HttpGet]
     public virtual ActionResult UnBind(String id)
     {
-        var user = Provider.Current;
+        var user = _clientService.Current;
         if (user == null) throw new Exception("未登录！");
 
         var binds = UserConnect.FindAllByUserID(user.ID);
@@ -424,86 +446,200 @@ public class SsoController : ControllerBaseX
 
         return Json(0, "ok");
     }
+
+    #endregion
+    #endregion
+
+    #region 微信登录
+    /// <summary>微信小程序登录</summary>
+    [AllowAnonymous]
+    [HttpPost]
+    public virtual ApiResponse<TokenModel> WxMiniLogin(WxLoginModel model)
+    {
+        if (model == null) throw new ApiException(CubeCode.ParamError.ToInt(), "参数错误：请求体不能为空");
+        return WxLogin(model.Code, model.AppId, "WxOpen").ToOkApiResponse();
+    }
+
+    /// <summary>微信APP登录</summary>
+    [AllowAnonymous]
+    [HttpPost]
+    public virtual ApiResponse<TokenModel> WxAppLogin(WxLoginModel model)
+    {
+        if (model == null) throw new ApiException(CubeCode.ParamError.ToInt(), "参数错误：请求体不能为空");
+        return WxLogin(model.Code, model.AppId, "WxApp").ToOkApiResponse();
+    }
+
+    /// <summary>微信登录核心方法</summary>
+    protected virtual TokenModel WxLogin(String code, String appId, String wxLoginType)
+    {
+        if (String.IsNullOrWhiteSpace(code))
+            throw new ApiException(CubeCode.ParamError.ToInt(), $"参数错误：{nameof(code)}");
+
+        // 请求体未传AppId时，尝试从请求头X-App-Id获取
+        if (String.IsNullOrWhiteSpace(appId))
+            appId = Request.Headers["X-App-Id"] + "";
+        else
+        {
+            // 两者都传且不一致时，拒绝并提示，避免租户归属歧义
+            var headerAppId = Request.Headers["X-App-Id"] + "";
+            if (!headerAppId.IsNullOrEmpty() && !headerAppId.EqualIgnoreCase(appId))
+                throw new ApiException(CubeCode.ParamError.ToInt(),
+                    $"参数错误：请求体{nameof(appId)}与请求头X-App-Id不一致");
+        }
+        if (String.IsNullOrWhiteSpace(appId))
+            throw new ApiException(CubeCode.ParamError.ToInt(), $"参数错误：{nameof(appId)}");
+
+        var client = CreateWxOpenClient(appId, wxLoginType);
+        var tokenModel = ProcessWxLoginCore(client, code, $"{wxLoginType}", true);
+
+        // 登录成功后，通过响应头返回租户编码，供客户端后续请求携带 X-Tenant 保持租户
+        if (client.TenantId > 0)
+        {
+            var tenant = XCode.Membership.Tenant.FindById(client.TenantId);
+            if (tenant != null && !tenant.Code.IsNullOrEmpty())
+                Response.Headers["X-Tenant"] = tenant.Code;
+        }
+
+        return tokenModel;
+    }
+
+    /// <summary>创建微信OAuth客户端</summary>
+    protected virtual OAuthClient CreateWxOpenClient(String appId, String wxLoginType)
+    {
+        // 先按AppId解析配置（FindByAppId已过滤启用且未删除），再以配置租户创建客户端，
+        // 避免匿名请求租户上下文为空（TenantId=0）时GetClient按0租户找不到配置而失败
+        OAuthConfig config = null;
+        if (!String.IsNullOrWhiteSpace(appId))
+            config = OAuthConfig.FindByAppId(appId);
+        if (config == null)
+            throw new ApiException(CubeCode.Exception.ToInt(),
+                $"应用{nameof(OAuthConfig.AppId)}未配置");
+        if (String.IsNullOrWhiteSpace(config.Secret))
+            throw new ApiException(CubeCode.Exception.ToInt(),
+                $"应用{nameof(OAuthConfig.Secret)}未配置");
+
+        // 以配置所属租户创建客户端，保证微信登录落在正确租户
+        // wxLoginType 登录类型，用于取oauh2客户端，不能用配置的Name
+        // 如果用配置的Name则必须设置成WxOpen，但是难免不会有人写成别的值，导致解析到的oauth客户端不对
+        var client = _clientService.GetClient(config.TenantId, wxLoginType);
+        client.Init(GetUserAgent());
+
+        client.Key = config.AppId;
+        client.Secret = config.Secret;
+        client.TenantId = config.TenantId;
+
+        // 设置租户上下文，后续绑定/注册/数据访问均落在该租户
+        HttpContext.SetTenant(config.TenantId);
+
+        return client;
+    }
+
+    /// <summary>处理微信登录的公共逻辑</summary>
+    protected virtual TokenModel ProcessWxLoginCore(OAuthClient client, String code, String action, Boolean includeAvatar)
+    {
+        client.Log = XTrace.Log;
+
+        var log = new OAuthLog
+        {
+            Provider = client.Name,
+            Action = action,
+            Success = false,
+            ResponseType = client.ResponseType,
+            Scope = client.Scope,
+            TraceId = DefaultSpan.Current?.TraceId,
+            Remark = GetUserAgent(),
+        };
+        log.Insert();
+
+        try
+        {
+            client.GetAccessToken(code);
+
+            if (client.OpenID.IsNullOrEmpty())
+                throw new ApiException(CubeCode.RemotingError.ToInt(), "获取 OpenID 失败");
+
+            log.AccessToken = client.AccessToken;
+            log.RefreshToken = client.RefreshToken;
+
+            if (!client.UserUrl.IsNullOrEmpty()) client.GetUserInfo();
+
+            var uc = _bindingService.GetConnect(client);
+            uc.Fill(client);
+
+            _clientService.OnLogin(client, HttpContext.RequestServices, uc, false, 0);
+
+            var user = ManageProvider.Provider.Current;
+            if (user == null)
+                throw new ApiException(CubeCode.Failed.ToInt(), "登录失败，用户不存在");
+
+            // 登录成功后设置租户上下文，保证后续请求/数据访问落在正确租户
+            HttpContext.SetTenant(client.TenantId);
+
+            log.ConnectId = uc.ID;
+            log.UserId = uc.UserID;
+            log.Success = true;
+            log.Update();
+
+            var set = CubeSetting.Current;
+            var token = HttpContext.IssueLoginToken(user, TimeSpan.FromSeconds(set.TokenExpire));
+
+            return token;
+        }
+        catch (Exception ex)
+        {
+            if (log.Remark.IsNullOrEmpty()) log.Remark = ex.Message;
+            log.Success = false;
+            log.SaveAsync();
+
+            throw;
+        }
+    }
     #endregion
 
     #region 单点登录服务端
     /// <summary>1，验证用户身份</summary>
-    /// <remarks>
-    /// 子系统需要验证访问者身份时，引导用户跳转到这里。
-    /// 用户登录完成后，得到一个独一无二的code，并跳转回去子系统。
-    /// </remarks>
-    /// <param name="client_id">应用标识</param>
-    /// <param name="redirect_uri">回调地址</param>
-    /// <param name="response_type">响应类型。默认code</param>
-    /// <param name="scope">授权域</param>
-    /// <param name="state">用户状态数据</param>
-    /// <param name="loginUrl">登录页。子系统请求SSO时，如果在SSO未登录则直接跳转的地址，该地址有可能属于子系统自身，适用于password模式登录等场景</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     public virtual ActionResult Authorize(String client_id, String redirect_uri, String response_type = null, String scope = null, String state = null, String loginUrl = null)
     {
-        // 参数不完整时，跳转到登录页面，避免爬虫抓取而导致误报告警
-        if (client_id.IsNullOrEmpty()) return Redirect(loginUrl ?? Provider.LoginUrl);
+        if (client_id.IsNullOrEmpty()) return Redirect(loginUrl ?? _clientService.LoginUrl);
 
-        //if (client_id.IsNullOrEmpty()) throw new ArgumentNullException(nameof(client_id));
+        if (redirect_uri.IsNullOrEmpty()) redirect_uri = GetRequest("redirect_url");
         if (redirect_uri.IsNullOrEmpty()) throw new ArgumentNullException(nameof(redirect_uri));
         if (response_type.IsNullOrEmpty()) response_type = "code";
 
-        // 判断合法性，然后跳转到登录页面，登录完成后跳转回来
-        var key = OAuth.Authorize(client_id, redirect_uri, response_type, scope, state, UserHost);
+        var key = _serverService.Authorize(client_id, redirect_uri, response_type, scope, state, UserHost);
 
-        var prov = Provider;
         var url = "";
 
-        // 如果已经登录，直接返回。否则跳到登录页面
-        var user = prov?.Current;
-        user ??= prov?.Provider.TryLogin(HttpContext);
+        var user = _clientService.Current;
+        user ??= ManageProvider.Provider.TryLogin(HttpContext);
         if (user != null)
-            url = OAuth.GetResult(key, user);
+            url = _serverService.GetResult(key, user);
         else if (!loginUrl.IsNullOrEmpty())
             url = loginUrl;
         else
-            url = prov.GetLoginUrl(key);
+            url = _clientService.GetLoginUrl(key);
 
         return Redirect(url);
     }
 
     /// <summary>2，用户登录成功后返回这里</summary>
-    /// <remarks>
-    /// 构建身份验证结构，返回code给子系统
-    /// </remarks>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     public virtual ActionResult Auth2(String id)
     {
         if (id.IsNullOrEmpty()) throw new ArgumentNullException(nameof(id));
 
-        var user = Provider?.Current;
-        //if (user == null) throw new InvalidOperationException("未登录！");
-        // 未登录时跳转到登录页面，重新认证
-        if (user == null) return Redirect(Provider.GetLoginUrl(id));
+        var user = _clientService.Current;
+        if (user == null) return Redirect(_clientService.GetLoginUrl(id));
 
-        // 返回给子系统的数据：
-        // code 授权码，子系统凭借该代码来索取用户信息
-        // state 子系统传过来的用户状态数据，原样返回
-
-        var url = OAuth.GetResult(id, user);
+        var url = _serverService.GetResult(id, user);
 
         return Redirect(url);
     }
 
     /// <summary>3，根据code获取令牌</summary>
-    /// <remarks>
-    /// 子系统根据验证用户身份时得到的code，直接在服务器间请求本系统。
-    /// 传递应用标识和密钥，主要是为了向本系统表明其合法身份。
-    /// </remarks>
-    /// <param name="client_id">应用标识</param>
-    /// <param name="client_secret">密钥</param>
-    /// <param name="code">代码</param>
-    /// <param name="grant_type">授权类型</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     [HttpPost]
@@ -516,22 +652,15 @@ public class SsoController : ControllerBaseX
 
         if (!grant_type.EqualIgnoreCase("authorization_code")) throw new NotSupportedException(nameof(grant_type));
 
-        // 返回给子系统的数据：
-        // access_token 访问令牌
-        // expires_in 有效期
-        // refresh_token 刷新令牌
-        // openid 用户唯一标识
-
         try
         {
-            var token = Provider.GetAccessToken(OAuth, client_id, client_secret, code, UserHost);
+            var token = _tokenService.GetAccessToken(client_id, client_secret, code, UserHost);
 
-            // 返回UserInfo告知客户端可以请求用户信息
             var rs = new
             {
                 access_token = token.AccessToken,
                 refresh_token = token.RefreshToken,
-                expires_in = token.Expire,
+                expires_in = token.ExpireIn,
                 scope = token.Scope,
             };
             return SsoJsonOK(rs);
@@ -545,21 +674,6 @@ public class SsoController : ControllerBaseX
     }
 
     /// <summary>3，根据password/client_credentials获取令牌</summary>
-    /// <remarks>
-    /// 密码式：
-    /// 用户把用户名和密码，直接告诉该应用。该应用就使用你的密码，申请令牌，这种方式称为"密码式"（password）。
-    /// 为了避免密码暴露在Url中，需要用表单Post方式提交。
-    /// 凭证式：
-    /// 凭证式（client credentials），适用于没有前端的命令行应用，即在命令行下请求令牌。
-    /// 针对第三方应用，而不是针对用户的，即有可能多个用户共享同一个令牌。
-    /// </remarks>
-    /// <param name="client_id">应用标识</param>
-    /// <param name="client_secret">密钥</param>
-    /// <param name="username">用户名。可以是设备编码等唯一使用者标识</param>
-    /// <param name="password">密码</param>
-    /// <param name="refresh_token">刷新令牌</param>
-    /// <param name="grant_type">授权类型</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     [HttpPost]
@@ -568,35 +682,28 @@ public class SsoController : ControllerBaseX
         if (client_id.IsNullOrEmpty()) throw new ArgumentNullException(nameof(client_id));
         if (grant_type.IsNullOrEmpty()) grant_type = "password";
 
-        // 返回给子系统的数据：
-        // access_token 访问令牌
-        // expires_in 有效期
-        // refresh_token 刷新令牌
-        // openid 用户唯一标识
-
         try
         {
-            TokenInfo token = null;
+            TokenModel token = null;
             switch (grant_type.ToLower())
             {
                 case "password":
                     if (username.IsNullOrEmpty()) throw new ArgumentNullException(nameof(username));
                     if (password.IsNullOrEmpty()) throw new ArgumentNullException(nameof(password));
 
-                    token = Provider.GetAccessTokenByPassword(OAuth, client_id, username, password, UserHost);
+                    token = _tokenService.GetAccessTokenByPassword(client_id, username, password, UserHost);
                     break;
 
                 case "client_credentials":
                     if (client_secret.IsNullOrEmpty()) throw new ArgumentNullException(nameof(client_secret));
 
-                    // username 可以是设备编码等唯一使用者标识
-                    token = Provider.GetAccessTokenByClientCredentials(OAuth, client_id, client_secret, username, UserHost);
+                    token = _tokenService.GetAccessTokenByClientCredentials(client_id, client_secret, username, UserHost);
                     break;
 
                 case "refresh_token":
                     if (refresh_token.IsNullOrEmpty()) throw new ArgumentNullException(nameof(refresh_token));
 
-                    token = Provider.RefreshToken(OAuth, client_id, refresh_token, UserHost);
+                    token = _tokenService.RefreshToken(client_id, refresh_token, UserHost);
                     break;
             }
 
@@ -604,7 +711,7 @@ public class SsoController : ControllerBaseX
             {
                 access_token = token.AccessToken,
                 refresh_token = token.RefreshToken,
-                expires_in = token.Expire,
+                expires_in = token.ExpireIn,
                 scope = token.Scope,
             };
             return SsoJsonOK(rs);
@@ -617,16 +724,7 @@ public class SsoController : ControllerBaseX
         }
     }
 
-    /// <summary>3，根据password/client_credentials获取令牌</summary>
-    /// <remarks>
-    /// 密码式：
-    /// 用户把用户名和密码，直接告诉该应用。该应用就使用你的密码，申请令牌，这种方式称为"密码式"（password）。
-    /// 凭证式：
-    /// 凭证式（client credentials），适用于没有前端的命令行应用，即在命令行下请求令牌。
-    /// 针对第三方应用，而不是针对用户的，即有可能多个用户共享同一个令牌。
-    /// </remarks>
-    /// <param name="model">请求模型</param>
-    /// <returns></returns>
+    /// <summary>3，根据password/client_credentials获取令牌（JSON Body）</summary>
     [AllowAnonymous]
     [HttpGet]
     [HttpPost]
@@ -637,21 +735,20 @@ public class SsoController : ControllerBaseX
 
         try
         {
-            TokenInfo token = null;
+            TokenModel token = null;
             switch (model.grant_type.ToLower())
             {
                 case "password":
                     if (model.UserName.IsNullOrEmpty()) throw new ArgumentNullException(nameof(model.UserName));
                     if (model.Password.IsNullOrEmpty()) throw new ArgumentNullException(nameof(model.Password));
 
-                    token = Provider.GetAccessTokenByPassword(OAuth, model.client_id, model.UserName, model.Password, UserHost);
+                    token = _tokenService.GetAccessTokenByPassword(model.client_id, model.UserName, model.Password, UserHost);
                     break;
 
                 case "client_credentials":
                     if (model.client_secret.IsNullOrEmpty()) throw new ArgumentNullException(nameof(model.client_secret));
 
-                    // username 可以是设备编码等唯一使用者标识
-                    token = Provider.GetAccessTokenByClientCredentials(OAuth, model.client_id, model.client_secret, model.UserName, UserHost);
+                    token = _tokenService.GetAccessTokenByClientCredentials(model.client_id, model.client_secret, model.UserName, UserHost);
                     break;
             }
 
@@ -659,7 +756,7 @@ public class SsoController : ControllerBaseX
             {
                 access_token = token.AccessToken,
                 refresh_token = token.RefreshToken,
-                expires_in = token.Expire,
+                expires_in = token.ExpireIn,
                 scope = token.Scope,
             };
             return SsoJsonOK(rs);
@@ -673,25 +770,22 @@ public class SsoController : ControllerBaseX
     }
 
     /// <summary>4，根据token获取用户信息</summary>
-    /// <param name="access_token">访问令牌</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     public virtual ActionResult UserInfo(String access_token)
     {
         if (access_token.IsNullOrEmpty()) throw new ArgumentNullException(nameof(access_token));
 
-        var sso = OAuth;
         IManageUser user = null;
 
         var msg = "";
         try
         {
-            var username = OAuth.Decode(access_token);
-            user = Provider?.GetUser(sso, username);
+            var username = _tokenService.Decode(access_token);
+            user = _tokenService.GetUser(username);
             if (user == null) throw new XException("用户[{0}]不存在", username);
 
-            var rs = Provider.GetUserInfo(sso, access_token, user);
+            var rs = _tokenService.GetUserInfo(access_token, user);
             return SsoJsonOK(rs);
         }
         catch (Exception ex)
@@ -704,19 +798,11 @@ public class SsoController : ControllerBaseX
         }
         finally
         {
-            sso.WriteLog("UserInfo {0} access_token={1} msg={2}", user, access_token, msg);
+            _tokenService.WriteLog("UserInfo {0} access_token={1} msg={2}", user, access_token, msg);
         }
     }
 
     /// <summary>5，刷新令牌</summary>
-    /// <remarks>
-    /// 若access_token已超时，那么进行refresh_token会获取一个新的access_token，新的超时时间；
-    /// 若access_token未超时，那么进行refresh_token不会改变access_token，但超时时间会刷新，相当于续期access_token。
-    /// </remarks>
-    /// <param name="client_id">应用标识</param>
-    /// <param name="grant_type">授权类型</param>
-    /// <param name="refresh_token">刷新令牌</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     [HttpPost]
@@ -725,19 +811,17 @@ public class SsoController : ControllerBaseX
         if (client_id.IsNullOrEmpty()) throw new ArgumentNullException(nameof(client_id));
         if (grant_type.IsNullOrEmpty()) grant_type = "refresh_token";
 
-        //!!! 由于访问令牌使用JWT，做不到微信的机制，刷新令牌时access_token不改变且续期。JWT想要续期，就必须重新颁发。
-
         if (refresh_token.IsNullOrEmpty()) throw new ArgumentNullException(nameof(refresh_token));
 
         try
         {
-            var token = Provider.RefreshToken(OAuth, client_id, refresh_token, UserHost);
+            var token = _tokenService.RefreshToken(client_id, refresh_token, UserHost);
 
             var rs = new
             {
                 access_token = token.AccessToken,
                 refresh_token = token.RefreshToken,
-                expires_in = token.Expire,
+                expires_in = token.ExpireIn,
                 scope = token.Scope,
             };
 
@@ -752,8 +836,6 @@ public class SsoController : ControllerBaseX
     }
 
     /// <summary>验证令牌是否有效</summary>
-    /// <param name="access_token">应用</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     public ActionResult Auth(String access_token)
@@ -762,10 +844,9 @@ public class SsoController : ControllerBaseX
         {
             if (access_token.IsNullOrEmpty()) throw new ArgumentNullException(nameof(access_token));
 
-            var prv = Provider.Provider;
-            var username = OAuth.Decode(access_token);
+            var prv = ManageProvider.Provider;
+            var username = _tokenService.Decode(access_token);
 
-            // 设置登录用户，
             var user = prv.FindByName(username);
             prv.Current = user ?? throw new XException("用户[{0}]不存在", username);
 
@@ -778,19 +859,16 @@ public class SsoController : ControllerBaseX
     }
 
     /// <summary>获取应用公钥，用于验证令牌</summary>
-    /// <param name="client_id">应用</param>
-    /// <param name="client_secret">密钥</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     public ActionResult GetKey(String client_id, String client_secret)
     {
         try
         {
-            var app = OAuth.Auth(client_id, client_secret + "", UserHost);
+            var app = _appService.Auth(client_id, client_secret + "", UserHost);
             if (app == null) throw new ArgumentException($"无效应用[{client_id}]");
 
-            var prv = OAuth.GetProvider();
+            var prv = _appService.GetProvider();
             var dsa = new DSACryptoServiceProvider();
             dsa.FromXmlStringX(prv.Key);
 
@@ -806,29 +884,23 @@ public class SsoController : ControllerBaseX
     }
 
     /// <summary>验证令牌，回写cookie</summary>
-    /// <param name="access_token">应用</param>
-    /// <param name="redirect_uri">回调地址</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     public ActionResult Verify(String access_token, String redirect_uri)
     {
         if (access_token.IsNullOrEmpty()) throw new ArgumentNullException(nameof(access_token));
 
-        var prv = Provider.Provider;
-        var username = OAuth.Decode(access_token);
+        var prv = ManageProvider.Provider;
+        var username = _tokenService.Decode(access_token);
 
-        // 设置登录用户
         var user = prv.FindByName(username);
         prv.Current = user ?? throw new XException("用户[{0}]不存在", username);
 
-        // 过期时间
         var set = CubeSetting.Current;
         var expire = TimeSpan.FromMinutes(0);
         if (set.SessionTimeout > 0)
             expire = TimeSpan.FromSeconds(set.SessionTimeout);
 
-        // 设置Cookie
         prv.SaveCookie(user, expire, HttpContext);
 
         if (redirect_uri.IsNullOrEmpty()) return Content("ok");
@@ -837,8 +909,6 @@ public class SsoController : ControllerBaseX
     }
 
     /// <summary>用户验证。借助OAuth密码式验证，并返回用户信息</summary>
-    /// <param name="model">令牌模型</param>
-    /// <returns></returns>
     [AllowAnonymous]
     [HttpGet]
     [HttpPost]
@@ -854,20 +924,20 @@ public class SsoController : ControllerBaseX
             if (username.IsNullOrEmpty()) throw new ArgumentNullException(nameof(username));
             if (password.IsNullOrEmpty()) throw new ArgumentNullException(nameof(password));
 
-            var token = Provider.GetAccessTokenByPassword(OAuth, client_id, username, password, UserHost);
+            var token = _tokenService.GetAccessTokenByPassword(client_id, username, password, UserHost);
             var rs = new
             {
                 access_token = token.AccessToken,
                 refresh_token = token.RefreshToken,
-                expires_in = token.Expire,
+                expires_in = token.ExpireIn,
                 scope = token.Scope,
             };
             var dic = rs.ToDictionary();
 
-            var user = Provider?.GetUser(OAuth, username);
+            var user = _tokenService.GetUser(username);
             if (user == null) throw new XException("用户[{0}]不存在", username);
 
-            var rs2 = Provider.GetUserInfo(OAuth, token.AccessToken, user);
+            var rs2 = _tokenService.GetUserInfo(token.AccessToken, user);
             dic.Merge(rs2);
 
             return Json(0, null, dic);
@@ -879,10 +949,38 @@ public class SsoController : ControllerBaseX
             return Json(0, null, ex);
         }
     }
+
+    /// <summary>OpenID Connect 发现文档</summary>
+    /// <returns></returns>
+    [AllowAnonymous]
+    [HttpGet]
+    [Route("/.well-known/openid-configuration")]
+    public virtual ActionResult OpenIdConfiguration()
+    {
+        var request = Request;
+        var baseUrl = $"{request.Scheme}://{request.Host}";
+
+        var rs = new
+        {
+            issuer = baseUrl,
+            authorization_endpoint = $"{baseUrl}/Sso/Authorize",
+            token_endpoint = $"{baseUrl}/Sso/Token",
+            userinfo_endpoint = $"{baseUrl}/Sso/UserInfo",
+            end_session_endpoint = $"{baseUrl}/Sso/Logout",
+            jwks_uri = $"{baseUrl}/Sso/GetKey",
+            response_types_supported = new[] { "code" },
+            grant_types_supported = new[] { "authorization_code", "password", "client_credentials", "refresh_token" },
+            subject_types_supported = new[] { "public" },
+            id_token_signing_alg_values_supported = new[] { "RS256" },
+            scopes_supported = new[] { "openid", "profile", "email" },
+        };
+
+        return new JsonResult(rs);
+    }
     #endregion
 
     #region 辅助
-    /// <summary>获取用户头像</summary>
+    /// <summary>获取用户头像。头像文件不存在时根据昵称和性别自动生成 SVG 文字头像</summary>
     /// <param name="id">用户编号</param>
     /// <returns></returns>
     [AllowAnonymous]
@@ -891,11 +989,9 @@ public class SsoController : ControllerBaseX
     {
         if (id <= 0) throw new ArgumentNullException(nameof(id));
 
-        var prv = Provider;
-        if (prv == null) throw new ArgumentNullException(nameof(Provider));
-
         var user = ManageProvider.Provider?.FindByID(id) as IUser;
-        if (user == null) throw new Exception("用户不存在 " + id);
+        // 用户可能已删除，返回404而非抛异常，避免客户端反复请求刷新错误日志与审计异常
+        if (user == null) return NotFound();
 
         var set = CubeSetting.Current;
         var av = "";
@@ -905,17 +1001,29 @@ public class SsoController : ControllerBaseX
             if (!System.IO.File.Exists(av)) av = null;
         }
 
-        // 用于兼容旧代码
         if (av.IsNullOrEmpty() && !set.AvatarPath.IsNullOrEmpty())
         {
-            av = set.AvatarPath.CombinePath(user.ID + ".png").GetBasePath();
-            if (!System.IO.File.Exists(av)) av = null;
+            var (found, _) = SvgAvatarService.FindAvatarFile(set.AvatarPath, user.ID);
+            av = found;
         }
 
-        if (!System.IO.File.Exists(av)) throw new Exception("用户头像不存在 " + id);
+        if (av.IsNullOrEmpty() || !System.IO.File.Exists(av))
+        {
+            // 懒加载兜底：本地头像缺失时，从用户连接中查找远程头像并触发异步下载到本地，
+            // 本次先跳转远程地址展示（对齐 MVC 版），下次请求即命中本地文件
+            if (user is IManageUser muser)
+            {
+                var remote = _bindingService.TryFetchRemoteAvatar(muser);
+                if (!remote.IsNullOrEmpty()) return Redirect(remote);
+            }
+
+            var svg = SvgAvatarService.Generate(user, set.AvatarChars);
+            return Content(svg, "image/svg+xml");
+        }
 
         var vs = System.IO.File.ReadAllBytes(av);
-        return File(vs, "image/png");
+        var ct = SvgAvatarService.GetContentType(Path.GetExtension(av));
+        return File(vs, ct);
     }
 
     private ActionResult SsoJsonOK(Object data) => Json(0, null, data);

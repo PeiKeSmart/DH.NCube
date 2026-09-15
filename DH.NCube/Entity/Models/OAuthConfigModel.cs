@@ -14,6 +14,12 @@ public partial class OAuthConfigModel
     /// <summary>编号</summary>
     public Int32 ID { get; set; }
 
+    /// <summary>租户</summary>
+    public Int32 TenantId { get; set; }
+
+    /// <summary>提供者。对应具体实现类标识，用于区分同类型多渠道</summary>
+    public String Provider { get; set; }
+
     /// <summary>名称。提供者名称</summary>
     public String Name { get; set; }
 
@@ -50,7 +56,7 @@ public partial class OAuthConfigModel
     /// <summary>用户地址。根据令牌获取用户信息的地址</summary>
     public String UserUrl { get; set; }
 
-    /// <summary>应用地址。域名和端口，应用系统经过反向代理重定向时指定外部地址</summary>
+    /// <summary>应用地址。域名和端口，应用系统经过反向代理重定向时指定外部地址，格式：/Sso/LoginInfo/{name}</summary>
     public String AppUrl { get; set; }
 
     /// <summary>启用</summary>
@@ -111,6 +117,8 @@ public partial class OAuthConfigModel
     public void Copy(OAuthConfigModel model)
     {
         ID = model.ID;
+        TenantId = model.TenantId;
+        Provider = model.Provider;
         Name = model.Name;
         NickName = model.NickName;
         Logo = model.Logo;
