@@ -37,10 +37,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BootstrapBlazor" Version="10.6.0" />
+    <PackageReference Include="BootstrapBlazor" Version="10.10.2" />
     <PackageReference Include="DH.NRedis.Extensions" Version="4.24.2026.714-beta1255" />
     <PackageReference Include="DH.NStardust.Extensions" Version="4.25.2026.914-beta0858" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
