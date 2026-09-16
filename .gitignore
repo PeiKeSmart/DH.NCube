@@ -8,6 +8,8 @@
 [Rr]elease/
 [Rr]eleases/
 [Cc]onfig/
+# React 皮肤前端源码目录（配置页视图）放行，其余 Config 配置目录（XCode.config 等）继续忽略
+!DH.NCube.React/web/src/views/config/
 [Ll]og/
 x64/
 x86/
@@ -21,7 +23,63 @@ bld/
 /Bin3
 /BinSSO
 /BinTest/net7.0
-/packages
+# packages 公共包：源码提交，构建产物和依赖忽略
+packages/*/dist/
+packages/*/node_modules/
+packages/node_modules/
 *.log
-/DH.NCube.Swagger/.vs/DH.NCube.Swagger
-/DH.NCube/Properties/launchSettings.json
+
+# 前端项目
+node_modules/
+DH.NCube.Vue/web/dist/
+DH.NCube.React/web/dist/
+DH.NCube.Vue/wwwroot/
+DH.NCube.React/wwwroot/
+DH.NCube.NaiveUI/wwwroot/
+DH.NCube.MUI/wwwroot/
+DH.NCube.Shadcn/wwwroot/
+
+# Angular CLI 缓存与编译输出
+DH.NCube.Angular/web/.angular/
+DH.NCube.Angular/wwwroot/
+
+# SvelteKit 生成目录
+*/web/.svelte-kit/
+
+# Vite/TypeScript 自动生成文件
+**/auto-imports.d.ts
+**/components.d.ts
+**/*.tsbuildinfo
+
+# 前端编译输出（各皮肤 wwwroot 生成子目录）
+DH.NCube.ArcoVue/wwwroot/assets/
+DH.NCube.Svelte/wwwroot/_app/
+DH.NCube.TDesign/wwwroot/assets/
+DH.NCube.Vuetify/wwwroot/assets/
+/XUnitTest/TestResults
+.shot/
+*/memory/*.md
+TODO.md
+.codegraph/
+.serena/
+
+# ===== 第三方主题静态资源 / 构建工具：移出版本库（不应入库） =====
+# 老皮肤项目的 wwwroot：均为第三方主题包、字体、vendored JS（echarts/element/bootstrap 等），
+# 非本仓库源码构建产物。新 Vue 皮肤的 wwwroot 已在上方忽略。
+/DH.NCube.Metronic/wwwroot/
+/DH.NCube.Metronic8/wwwroot/
+/DH.NCube.LayuiAdmin/wwwroot/
+/DH.NCube.Tabler/wwwroot/
+/DH.NCube.AdminLTE/wwwroot/
+/DH.NCube.Blazor/wwwroot/
+/DH.NCube.ElementUI/wwwroot/
+
+# 构建工具 XCode 实体生成器：应通过发布包/下载分发，不入库
+xcodetool.exe
+
+# 历史曾提交过的大二进制目录护栏（已在 HEAD 删除，防止被重新加回）
+/DLL/
+/DLL20/
+.umi/
+.umi-production/
+DH.NCube.Vue/web/scripts/element-tokens.json

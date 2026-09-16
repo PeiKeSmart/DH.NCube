@@ -2,6 +2,10 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <AssemblyTitle>猿人易测试工具</AssemblyTitle>
+    <Description>猿人易快速开发平台功能测试与验证项目，用于测试核心功能、性能验证、API 调试等。</Description>
+    <Company>湖北登灏科技有限公司</Company>
+    <Copyright>©2020-2026 湖北登灏科技有限公司</Copyright>
     <OutputPath>..\Bin\Test\</OutputPath>
     <LangVersion>latest</LangVersion>
     <Version>1.0.0.1130</Version>
@@ -18,5 +22,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DH.NCode" Version="4.25.2026.914-beta0303" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DH.NCubeNC\DH.NCubeNC.csproj" />
   </ItemGroup>
 </Project>

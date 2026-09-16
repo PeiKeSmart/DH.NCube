@@ -18,6 +18,7 @@
     <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <Nullable>annotations</Nullable>
     <NoWarn>1701;1702;NU5104;NETSDK1138;CS7035</NoWarn>
   </PropertyGroup>
   <PropertyGroup>
@@ -36,8 +37,6 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PackageReadmeFile>Readme.MD</PackageReadmeFile>
-    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
-    <!--<GeneratePackageOnBuild>true</GeneratePackageOnBuild>-->
   </PropertyGroup>
 
   <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
@@ -45,17 +44,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Remove="Entity\Config\**" />
-    <Compile Remove="Entity\Log\**" />
-    <Content Remove="Entity\Config\**" />
-    <Content Remove="Entity\Log\**" />
-    <EmbeddedResource Remove="Entity\Config\**" />
-    <EmbeddedResource Remove="Entity\Log\**" />
-    <None Remove="Entity\Config\**" />
-    <None Remove="Entity\Log\**" />
   </ItemGroup>
 
   <!-- 将 wwwroot 静态文件嵌入 DLL，同时不打包到 NuGet -->
@@ -172,6 +160,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Entity\Models\" />
     <Folder Include="Session\" />
     <Folder Include="Modules\" />
     <Folder Include="ViewModels\" />
