@@ -16,7 +16,7 @@ public static class TDesignService
     public static WebApplication UseTDesign(this WebApplication app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.TDesign.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.TDesign.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {
@@ -48,7 +48,7 @@ internal class TDesignModule : IModule
     public void Use(IApplicationBuilder app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.TDesign.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.TDesign.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {

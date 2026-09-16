@@ -17,7 +17,7 @@ public static class NaiveUIService
     {
         // 嵌入在 DLL 中的 wwwroot 文件，作为静态资源
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.NaiveUI.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.NaiveUI.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {
@@ -57,7 +57,7 @@ internal class NaiveUIModule : IModule
         // Module接口签名为IApplicationBuilder，无法调用MapFallbackToFile
         // SPA回退路由通过用户在Program.cs显式调用 app.UseNaiveUI(env) 注册
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.NaiveUI.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.NaiveUI.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {

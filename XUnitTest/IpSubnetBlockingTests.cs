@@ -11,7 +11,8 @@ public class IpSubnetBlockingTests
     #region 辅助：通过反射调用静态方法
 
     // GetSubnet24/GetSubnet16 已从 UserService 移至 AuthHelper（internal 静态类），通过类型名反射获取
-    private static readonly Type _authHelperType = Type.GetType("NewLife.Cube.Services.AuthHelper, NewLife.Cube")!;
+    // 注意：DH 分支程序集名已改为 DH.NCube，这里改为按同类程序集解析，避免写死程序集名
+    private static readonly Type _authHelperType = typeof(ICaptchaService).Assembly.GetType("NewLife.Cube.Services.AuthHelper")!;
 
     private static readonly MethodInfo _getSubnet24 = _authHelperType
         .GetMethod("GetSubnet24", BindingFlags.Public | BindingFlags.Static)!;

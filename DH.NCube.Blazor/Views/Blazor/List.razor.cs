@@ -15,7 +15,7 @@ using NewLife.Serialization;
 
 using XCode.Membership;
 
-namespace NewLife.Cube.Blazor.Views.Blazor
+namespace DH.NCube.Blazor.Views.Blazor
 {
     public partial class List
     {

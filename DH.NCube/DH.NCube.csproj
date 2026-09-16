@@ -58,6 +58,12 @@
     <None Remove="Entity\Log\**" />
   </ItemGroup>
 
+  <!-- 将 wwwroot 静态文件嵌入 DLL，同时不打包到 NuGet -->
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**\*" />
+    <Content Remove="wwwroot\**\*" />
+  </ItemGroup>
+
   <!-- 引用 ASP.NET Core 共享框架 (替代 Web SDK 隐式引用) -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -74,6 +80,12 @@
     <Using Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
+  <!-- 单元测试工程可见内部成员（对齐上游 NewLife.Cube.csproj 的 InternalsVisibleTo；DH 程序集未签名，故不带 Key） -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="DH.NCube.Tests" />
+    <InternalsVisibleTo Include="XUnitTest" />
+  </ItemGroup>
+
 
   <ItemGroup>
     <Compile Remove="Areas\Cube\Controllers\ModelColumnController.cs" />
@@ -86,6 +98,7 @@
     <Compile Remove="Entity\模型表.cs" />
     <Compile Remove="Extensions\ItemsExtend.cs" />
     <Compile Remove="Extensions\MvcActionResultHelper.cs" />
+    <Compile Remove="Web\Models\TokenInfo.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -124,15 +137,29 @@
     <Compile Include="..\DH.NCubeNC\ViewModels\SearchField.cs" Link="ViewModels\SearchField.cs" />
     <Compile Include="..\DH.NCubeNC\ViewModels\TextAligns.cs" Link="ViewModels\TextAligns.cs" />
     <Compile Include="..\DH.NCubeNC\ViewModels\ViewKinds.cs" Link="ViewModels\ViewKinds.cs" />
+    <Compile Include="..\DH.NCubeNC\Extensions\CubeEmbeddedFileProvider.cs" Link="Extensions\CubeEmbeddedFileProvider.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\AttachmentCleanJob.cs" Link="Jobs\AttachmentCleanJob.cs" />
+    <Compile Include="..\DH.NCubeNC\Jobs\BackupHelper.cs" Link="Jobs\BackupHelper.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\BlockService.cs" Link="Services\BlockService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\DefaultAccountCloseHandler.cs" Link="Services\DefaultAccountCloseHandler.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\ExternalAuthService.cs" Link="Services\ExternalAuthService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\FileStorageService.cs" Link="Services\FileStorageService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\IAccountCloseHandler.cs" Link="Services\IAccountCloseHandler.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\SecurityEventService.cs" Link="Services\SecurityEventService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\SvgAvatarService.cs" Link="Services\SvgAvatarService.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\ThreatDetector.cs" Link="Services\ThreatDetector.cs" />
+    <Compile Include="..\DH.NCubeNC\Services\TokenService.cs" Link="Services\TokenService.cs" />
+    <Compile Include="..\DH.NCubeNC\WebMiddleware\DataScopeMiddleware.cs" Link="WebMiddleware\DataScopeMiddleware.cs" />
     <Compile Include="..\DH.NCubeNC\WebMiddleware\MiddlewareHelper.cs" Link="WebMiddleware\MiddlewareHelper.cs" />
-    <Compile Include="..\DH.NCubeNC\WebMiddleware\TenantMiddleware.cs" Link="WebMiddleware\TenantMiddleware.cs" />
-    <Compile Include="..\DH.NCubeNC\WebMiddleware\TracerMiddleware.cs" Link="WebMiddleware\TracerMiddleware.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="4.22.2026.513-beta1121" />
-    <PackageReference Include="DH.NIP" Version="4.21.2026.305-beta0044" />
-    <PackageReference Include="DH.NStardust" Version="4.21.2026.326-beta0835" />
-    <PackageReference Include="Pek.Office" Version="4.22.2026.516-beta0902" />
+    <PackageReference Include="DH.NCode" Version="4.25.2026.914-beta0303" />
+    <PackageReference Include="DH.NIP" Version="4.25.2026.906-beta0756" />
+    <PackageReference Include="DH.NStardust" Version="4.25.2026.914-beta0858" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.25.2026.914-beta0858" />
+    <!-- Pek.NAI 为 NewLife.AI 的 DH 分支，提供 NewLife.AI.* 命名空间 -->
+    <PackageReference Include="Pek.NAI" Version="4.22.2026.916-beta0201" />
+    <PackageReference Include="Pek.Office" Version="4.25.2026.915-beta0314" />
   </ItemGroup>
 
   <ItemGroup>

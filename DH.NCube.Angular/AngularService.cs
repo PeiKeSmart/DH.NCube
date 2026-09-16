@@ -16,7 +16,7 @@ public static class AngularService
     public static WebApplication UseAngular(this WebApplication app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.Angular.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.Angular.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {
@@ -48,7 +48,7 @@ internal class AngularModule : IModule
     public void Use(IApplicationBuilder app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.Angular.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.Angular.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {

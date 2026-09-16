@@ -79,10 +79,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NCode" Version="4.22.2026.513-beta1121" />
-    <PackageReference Include="DH.NIP" Version="4.21.2026.305-beta0044" />
-    <PackageReference Include="DH.NStardust" Version="4.21.2026.326-beta0835" />
-    <PackageReference Include="Pek.Office" Version="4.22.2026.516-beta0902" />
+    <PackageReference Include="DH.NCode" Version="4.25.2026.914-beta0303" />
+    <PackageReference Include="DH.NIP" Version="4.25.2026.906-beta0756" />
+    <PackageReference Include="DH.NStardust" Version="4.25.2026.914-beta0858" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.25.2026.914-beta0858" />
+    <!-- Pek.NAI 为 NewLife.AI 的 DH 分支，提供 NewLife.AI.* 命名空间 -->
+    <PackageReference Include="Pek.NAI" Version="4.22.2026.916-beta0201" />
+    <PackageReference Include="Pek.Office" Version="4.25.2026.915-beta0314" />
   </ItemGroup>
 
   <ItemGroup>
@@ -148,18 +151,15 @@
     <Compile Include="..\DH.NCube\Extensions\WebHelper.cs" Link="Extensions\WebHelper.cs" />
     <Compile Include="..\DH.NCube\Models\ImportContext.cs" Link="Models\ImportContext.cs" />
     <Compile Include="..\DH.NCube\Models\TokenInModel.cs" Link="Models\TokenInModel.cs" />
-    <Compile Include="..\DH.NCube\Services\TokenService.cs" Link="Services\TokenService.cs" />
     <Compile Include="..\DH.NCube\Web\AttachmentProvider.cs" Link="Web\AttachmentProvider.cs" />
     <Compile Include="..\DH.NCube\Web\Models\ApprovalInfo.cs" Link="Web\Models\ApprovalInfo.cs" />
     <Compile Include="..\DH.NCube\Web\Models\CheckInData.cs" Link="Web\Models\CheckInData.cs" />
     <Compile Include="..\DH.NCube\Web\Models\DepartmentInfo.cs" Link="Web\Models\DepartmentInfo.cs" />
     <Compile Include="..\DH.NCube\Web\Models\OAuthFieldMap.cs" Link="Web\Models\OAuthFieldMap.cs" />
     <Compile Include="..\DH.NCube\Web\Models\SsoTokenModel.cs" Link="Web\Models\SsoTokenModel.cs" />
-    <Compile Include="..\DH.NCube\Web\Models\TokenInfo.cs" Link="Web\Models\TokenInfo.cs" />
     <Compile Include="..\DH.NCube\Web\Models\UserInfo.cs" Link="Web\Models\UserInfo.cs" />
     <Compile Include="..\DH.NCube\Web\OAuthClient.cs" Link="Web\OAuthClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuthHelper.cs" Link="Web\OAuthHelper.cs" />
-    <Compile Include="..\DH.NCube\Web\OAuthServer.cs" Link="Web\OAuthServer.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\AlipayClient.cs" Link="Web\OAuth\AlipayClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\BaiduClient.cs" Link="Web\OAuth\BaiduClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\DingTalkClient.cs" Link="Web\OAuth\DingTalkClient.cs" />
@@ -173,9 +173,67 @@
     <Compile Include="..\DH.NCube\Web\OAuth\WeiboClient.cs" Link="Web\OAuth\WeiboClient.cs" />
     <Compile Include="..\DH.NCube\Web\OAuth\WeixinClient.cs" Link="Web\OAuth\WeixinClient.cs" />
     <Compile Include="..\DH.NCube\Web\SsoClient.cs" Link="Web\SsoClient.cs" />
-    <Compile Include="..\DH.NCube\Web\SsoProvider.cs" Link="Web\SsoProvider.cs" />
     <Compile Include="..\DH.NCube\Web\UserAgentParser.cs" Link="Web\UserAgentParser.cs" />
     <Compile Include="..\DH.NCube\Web\WebHelper2.cs" Link="Web\WebHelper2.cs" />
+    <Compile Include="..\DH.NCube\OnlineAlertService.cs" Link="OnlineAlertService.cs" />
+    <Compile Include="..\DH.NCube\AI\IAIService.cs" Link="AI\IAIService.cs" />
+    <Compile Include="..\DH.NCube\AI\AIService.cs" Link="AI\AIService.cs" />
+    <Compile Include="..\DH.NCube\AI\AIPlugin.cs" Link="AI\AIPlugin.cs" />
+    <Compile Include="..\DH.NCube\AI\Jobs\AILogSummaryJob.cs" Link="AI\Jobs\AILogSummaryJob.cs" />
+    <Compile Include="..\DH.NCube\AI\AiDataHelper.cs" Link="AI\AiDataHelper.cs" />
+    <Compile Include="..\DH.NCube\AI\AiFormHelper.cs" Link="AI\AiFormHelper.cs" />
+    <Compile Include="..\DH.NCube\AI\AiInsightHelper.cs" Link="AI\AiInsightHelper.cs" />
+    <Compile Include="..\DH.NCube\AI\CubeAiChatRequest.cs" Link="AI\CubeAiChatRequest.cs" />
+    <Compile Include="..\DH.NCube\AI\PageCheckpointService.cs" Link="AI\PageCheckpointService.cs" />
+    <Compile Include="..\DH.NCube\AI\BrowserToolService.cs" Link="AI\BrowserToolService.cs" />
+    <Compile Include="..\DH.NCube\AI\CubeTools.cs" Link="AI\CubeTools.cs" />
+    <Compile Include="..\DH.NCube\AI\SystemInfoToolService.cs" Link="AI\SystemInfoToolService.cs" />
+    <Compile Include="..\DH.NCube\AI\IPageDataContext.cs" Link="AI\IPageDataContext.cs" />
+    <Compile Include="..\DH.NCube\AI\IEntityAiContext.cs" Link="AI\IEntityAiContext.cs" />
+    <Compile Include="..\DH.NCube\AI\IFormAiContext.cs" Link="AI\IFormAiContext.cs" />
+    <Compile Include="..\DH.NCube\AI\ConfigFormToolService.cs" Link="AI\ConfigFormToolService.cs" />
+    <Compile Include="..\DH.NCube\AI\Jobs\AISecurityReportJob.cs" Link="AI\Jobs\AISecurityReportJob.cs" />
+    <Compile Include="..\DH.NCube\AI\AiController.cs" Link="AI\AiController.cs" />
+    <Compile Include="..\DH.NCube\Common\ValidFormatHelper.cs" Link="Common\ValidFormatHelper.cs" />
+    <Compile Include="..\DH.NCube\Common\EntityPageRegistry.cs" Link="Common\EntityPageRegistry.cs" />
+    <Compile Include="..\DH.NCube\Common\RolePermissionHelper.cs" Link="Common\RolePermissionHelper.cs" />
+    <Compile Include="..\DH.NCube\Common\EmptyHtmlHelper.cs" Link="Common\EmptyHtmlHelper.cs" />
+    <Compile Include="..\DH.NCube\Common\FileManagerAuthorizeAttribute.cs" Link="Common\FileManagerAuthorizeAttribute.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\MailConfigModel.cs" Link="Entity\Models\MailConfigModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\NotificationRecordModel.cs" Link="Entity\Models\NotificationRecordModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\SmsConfigModel.cs" Link="Entity\Models\SmsConfigModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\Models\VerifyCodeRecordModel.cs" Link="Entity\Models\VerifyCodeRecordModel.cs" />
+    <Compile Include="..\DH.NCube\Entity\短信配置.Biz.cs" Link="Entity\短信配置.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\短信配置.cs" Link="Entity\短信配置.cs" />
+    <Compile Include="..\DH.NCube\Entity\通知记录.Biz.cs" Link="Entity\通知记录.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\通知记录.cs" Link="Entity\通知记录.cs" />
+    <Compile Include="..\DH.NCube\Entity\邮件配置.Biz.cs" Link="Entity\邮件配置.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\邮件配置.cs" Link="Entity\邮件配置.cs" />
+    <Compile Include="..\DH.NCube\Entity\验证码记录.Biz.cs" Link="Entity\验证码记录.Biz.cs" />
+    <Compile Include="..\DH.NCube\Entity\验证码记录.cs" Link="Entity\验证码记录.cs" />
+    <Compile Include="..\DH.NCube\Enums\AuthCategory.cs" Link="Enums\AuthCategory.cs" />
+    <Compile Include="..\DH.NCube\Models\ServiceResult.cs" Link="Models\ServiceResult.cs" />
+    <Compile Include="..\DH.NCube\Models\VerifyCodeModel.cs" Link="Models\VerifyCodeModel.cs" />
+    <Compile Include="..\DH.NCube\Services\ICaptchaService.cs" Link="Services\ICaptchaService.cs" />
+    <Compile Include="..\DH.NCube\Services\Auth\AuthCacheKeys.cs" Link="Services\Auth\AuthCacheKeys.cs" />
+    <Compile Include="..\DH.NCube\Services\Auth\AuthHelper.cs" Link="Services\Auth\AuthHelper.cs" />
+    <Compile Include="..\DH.NCube\Services\IMfaService.cs" Link="Services\IMfaService.cs" />
+    <Compile Include="..\DH.NCube\Services\DrawingCaptchaService.cs" Link="Services\DrawingCaptchaService.cs" />
+    <Compile Include="..\DH.NCube\Services\TotpMfaService.cs" Link="Services\TotpMfaService.cs" />
+    <Compile Include="..\DH.NCube\Services\IAttachmentStorage.cs" Link="Services\IAttachmentStorage.cs" />
+    <Compile Include="..\DH.NCube\Services\LocalAttachmentStorage.cs" Link="Services\LocalAttachmentStorage.cs" />
+    <Compile Include="..\DH.NCube\Services\ObjectAttachmentStorage.cs" Link="Services\ObjectAttachmentStorage.cs" />
+    <Compile Include="..\DH.NCube\Services\S3ObjectStorage.cs" Link="Services\S3ObjectStorage.cs" />
+    <Compile Include="..\DH.NCube\Services\Sso\*.cs" Link="Services\Sso\%(Filename)%(Extension)" />
+    <Compile Include="..\DH.NCube\Web\OAuth\WxAppClient.cs" Link="Web\OAuth\WxAppClient.cs" />
+    <Compile Include="..\DH.NCube\Web\OAuth\WxOpenClient.cs" Link="Web\OAuth\WxOpenClient.cs" />
+    <Compile Include="..\DH.NCube\Widgets\IWidget.cs" Link="Widgets\IWidget.cs" />
+    <Compile Include="..\DH.NCube\Widgets\WidgetAttribute.cs" Link="Widgets\WidgetAttribute.cs" />
+    <Compile Include="..\DH.NCube\Widgets\WidgetLayout.cs" Link="Widgets\WidgetLayout.cs" />
+    <Compile Include="..\DH.NCube\Widgets\WidgetManager.cs" Link="Widgets\WidgetManager.cs" />
+    <Compile Include="..\DH.NCube\Widgets\KpiModel.cs" Link="Widgets\KpiModel.cs" />
+    <Compile Include="..\DH.NCube\Widgets\System\*.cs" Link="Widgets\System\%(Filename)%(Extension)" />
+    <Compile Remove="..\DH.NCube\Widgets\System\MonitorWidget.cs" />
   </ItemGroup>
 
   <!-- 将 wwwroot 静态文件嵌入 DLL，同时不打包到 NuGet -->
@@ -206,6 +264,7 @@
     <Compile Remove="Common\ITenantController.cs" />
     <Compile Remove="Extensions\ItemsExtend.cs" />
     <Compile Remove="ViewModels\FieldModel.cs" />
+    <Compile Remove="WebMiddleware\TracerMiddleware.cs" />
   </ItemGroup>
 
   <ItemGroup>

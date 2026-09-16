@@ -25,11 +25,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NStardust.Extensions" Version="4.21.2026.326-beta0835" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.25.2026.914-beta0858" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\DH.NCube.ArcoVue\DH.NCube.ArcoVue.csproj" />
     <ProjectReference Include="..\DH.NCube.Swagger\DH.NCube.Swagger.csproj" />
+    <ProjectReference Include="..\DH.NCube.Vue\DH.NCube.Vue.csproj" />
     <ProjectReference Include="..\DH.NCube\DH.NCube.csproj" />
   </ItemGroup>
 

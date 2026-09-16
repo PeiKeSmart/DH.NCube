@@ -16,7 +16,7 @@ public static class VuetifyService
     public static WebApplication UseVuetify(this WebApplication app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.Vuetify.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.Vuetify.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {
@@ -48,7 +48,7 @@ internal class VuetifyModule : IModule
     public void Use(IApplicationBuilder app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.Vuetify.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.Vuetify.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {

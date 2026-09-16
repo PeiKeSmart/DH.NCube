@@ -16,7 +16,7 @@ public static class ArcoVueService
     public static WebApplication UseArcoVue(this WebApplication app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.ArcoVue.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.ArcoVue.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {
@@ -48,7 +48,7 @@ internal class ArcoVueModule : IModule
     public void Use(IApplicationBuilder app, IWebHostEnvironment env)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "NewLife.Cube.ArcoVue.wwwroot");
+        var embeddedProvider = new CubeEmbeddedFileProvider(assembly, "DH.NCube.ArcoVue.wwwroot");
 
         if (!env.WebRootPath.IsNullOrEmpty() && Directory.Exists(env.WebRootPath) && env.WebRootFileProvider != null)
         {

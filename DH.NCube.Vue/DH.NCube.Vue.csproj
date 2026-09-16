@@ -55,6 +55,11 @@
     <ProjectReference Include="..\DH.NCube\DH.NCube.csproj" />
   </ItemGroup>
 
+  <!-- 上游已无此文件（Vuetify 皮肤已独立为 DH.NCube.Vuetify 工程），保留文件但排除编译，避免重复注册 Vuetify 皮肤 -->
+  <ItemGroup>
+    <Compile Remove="VuetifyService.cs" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>

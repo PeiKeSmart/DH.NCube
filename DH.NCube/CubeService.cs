@@ -326,7 +326,7 @@ public static class CubeService
 
         // 服务魔方内嵌静态资源（wwwroot），支持物理目录覆盖
         {
-            var embeddedProvider = new CubeEmbeddedFileProvider(Assembly.GetExecutingAssembly(), "NewLife.Cube.wwwroot");
+            var embeddedProvider = new CubeEmbeddedFileProvider(Assembly.GetExecutingAssembly(), "DH.NCube.wwwroot");
             var webRoot = set.WebRootPath;
             var root = AppDomain.CurrentDomain.BaseDirectory.CombinePath(webRoot);
             if (root.IsNullOrEmpty() || !Directory.Exists(root)) root = webRoot.GetFullPath();

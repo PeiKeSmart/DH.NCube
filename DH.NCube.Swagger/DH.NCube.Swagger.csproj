@@ -49,19 +49,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DH.NStardust.Extensions" Version="4.21.2026.326-beta0835" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)'=='net8.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.27" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.2" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)'=='net9.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.16" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)'=='net10.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <PackageReference Include="DH.NStardust.Extensions" Version="4.25.2026.914-beta0858" />
+    <!-- Scalar API 文档 UI（与上游一致） -->
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.2" />
+    <!-- 上游统一使用 Swashbuckle 10.x（Microsoft.OpenApi v2），旧的按 TFM 分版本会与 v2 API 不兼容 -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
   <ItemGroup>
