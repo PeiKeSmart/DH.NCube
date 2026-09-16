@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <AssemblyTitle>魔方MVC端到端测试</AssemblyTitle>
     <Description>NewLife.CubeNC MVC 端到端自动化测试，覆盖认证、菜单导航、用户信息等核心场景。</Description>
     <Company>湖北登灏科技有限公司</Company>

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk" ToolsVersion="Current">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <AssemblyTitle>猿人易测试工具</AssemblyTitle>
     <Description>猿人易快速开发平台功能测试与验证项目，用于测试核心功能、性能验证、API 调试等。</Description>
     <Company>湖北登灏科技有限公司</Company>

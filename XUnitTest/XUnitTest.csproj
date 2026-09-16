@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <Nullable>annotations</Nullable>
     <AssemblyTitle>猿人易单元测试</AssemblyTitle>
     <Description>猿人易快速开发平台单元测试项目，覆盖核心功能、控制器、权限、字段元数据等模块的自动化测试。</Description>
